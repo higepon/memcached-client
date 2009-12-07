@@ -1,4 +1,4 @@
-TARGETS = $(BEAMS) $(APP)
+TARGETS = $(BEAMS)
 
 APP_NAME=memcached_client
 VERSION=0.0.1
@@ -9,7 +9,6 @@ EBIN_DIR=ebin
 INCLUDE_DIR=include
 SOURCES=$(wildcard $(SOURCE_DIR)/*.erl)
 BEAMS=$(patsubst $(SOURCE_DIR)/%.erl, $(EBIN_DIR)/%.beam, $(SOURCES))
-APP=$(EBIN_DIR)/mcbench.app
 ERLC_FLAGS=+warn_unused_vars \
            +warn_unused_import \
            +warn_shadow_vars \
@@ -29,6 +28,7 @@ $(EBIN_DIR)/%.beam: $(SOURCE_DIR)/%.erl
 	erlc -pa $(EBIN_DIR) $(ERLC_FLAGS) -I$(INCLUDE_DIR) -o$(EBIN_DIR) $<
 
 check: all
+	@erl -pa `pwd`/ebin -eval 'io:format("~p", [ct:run_test([{auto_compile, true}, {dir, "./test"}, {logdir, "./log"}, {refresh_logs, "./log"}, {cover, "./src/coverspec"}])]).' -s init stop
 
 test: check
 

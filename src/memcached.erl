@@ -34,7 +34,7 @@
 %%%
 %%% Created :  7 Dec 2009 by higepon <higepon@users.sourceforge.jp>
 %%%-------------------------------------------------------------------
--module(memcached.
+-module(memcached).
 
 %% API
 -export([]).
