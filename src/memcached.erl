@@ -35,9 +35,18 @@
 %%% Created :  7 Dec 2009 by higepon <higepon@users.sourceforge.jp>
 %%%-------------------------------------------------------------------
 -module(memcached).
+-behaviour(gen_server).
 
 %% API
--export([]).
+-export([connect/2]).
+
+-export([init/1]).
+
+%%====================================================================
+%% Definitions
+%%====================================================================
+-define(TCP_OPTIONS, [binary, {packet, raw}, {nodelay, true}, {reuseaddr, true}, {active, true},
+                      {sndbuf,16384},{recbuf,4096}]).
 
 %%====================================================================
 %% API
@@ -46,7 +55,26 @@
 %% Function:
 %% Description:
 %%--------------------------------------------------------------------
+connect(Host, Port) ->
+    Name = mem,
+    Hoge = gen_server:start_link({local, Name}, ?MODULE, [Host, Port], []),
+    io:format("Hoge=~p~n", [Hoge]),
+    case Hoge of
+        {error, Reason} ->
+            {error, Reason};
+        {ok, _Socket} ->
+            {ok, Name}
+    end.
+
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+init([Host, Port]) ->
+    case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
+        {ok, Socket} -> {ok, Socket};
+        {error, Reason} ->
+            {stop, Reason};
+        Other ->
+            {stop, Other}
+    end.

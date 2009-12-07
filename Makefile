@@ -21,6 +21,7 @@ ERLC_FLAGS=+warn_unused_vars \
 TARBALL_NAME=$(APP_NAME)-$(VERSION)
 DIST_TMP_DIR=tmp
 DIST_TARGET=$(DIST_TMP_DIR)/$(TARBALL_NAME)
+PID_FILE=/tmp/memcached-erlang.pid
 
 all: $(TARGETS)
 
@@ -28,7 +29,9 @@ $(EBIN_DIR)/%.beam: $(SOURCE_DIR)/%.erl
 	erlc -pa $(EBIN_DIR) $(ERLC_FLAGS) -I$(INCLUDE_DIR) -o$(EBIN_DIR) $<
 
 check: all
+	@memcached -d -p 11411 -P ${PID_FILE}
 	@erl -pa `pwd`/ebin -eval 'io:format("~p", [ct:run_test([{auto_compile, true}, {dir, "./test"}, {logdir, "./log"}, {refresh_logs, "./log"}, {cover, "./src/coverspec"}])]).' -s init stop
+	@kill `cat ${PID_FILE}`
 
 test: check
 
