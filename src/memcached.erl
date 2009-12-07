@@ -38,9 +38,11 @@
 -behaviour(gen_server).
 
 %% API
--export([connect/2]).
+-export([connect/2, disconnect/1]).
 
--export([init/1]).
+%% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+         terminate/2, code_change/3]).
 
 %%====================================================================
 %% Definitions
@@ -52,24 +54,89 @@
 %% API
 %%====================================================================
 %%--------------------------------------------------------------------
-%% Function:
-%% Description:
+%% Function: connect
+%% Description: connect to a memcached
+%% Returns: {ok, Conn} or {error, Reason}.
 %%--------------------------------------------------------------------
 connect(Host, Port) ->
-    Name = mem,
-    Hoge = gen_server:start_link({local, Name}, ?MODULE, [Host, Port], []),
-    io:format("Hoge=~p~n", [Hoge]),
-    case Hoge of
-        {error, Reason} ->
-            {error, Reason};
-        {ok, _Socket} ->
-            {ok, Name}
-    end.
+    Name = random_id(),
+    gen_server:start_link({local, Name}, ?MODULE, [Host, Port], []).
 
+%%--------------------------------------------------------------------
+%% Function: disconnect
+%% Description: disconnect
+%% Returns: ok
+%%--------------------------------------------------------------------
+disconnect(Conn) ->
+    gen_server:call(Conn, disconnect).
+
+connect(Hosts, Ports, Fun) ->
+    %% todo
+    %% Fun is
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
+%%                                      {reply, Reply, State, Timeout} |
+%%                                      {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, Reply, State} |
+%%                                      {stop, Reason, State}
+%% Description: Handling call messages
+%%--------------------------------------------------------------------
+handle_call(disconnect, _From, Sock) ->
+    io:format("here we are"),
+    gen_tcp:close(Sock),
+    {reply, ok, Sock}.
+
+
+%%--------------------------------------------------------------------
+%% Function: handle_cast(Msg, State) -> {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, State}
+%% Description: Handling cast messages
+%%--------------------------------------------------------------------
+handle_cast(Msg, State) ->
+    io:format("cast=~p~n", [Msg]),
+    {noreply, State}.
+
+%%--------------------------------------------------------------------
+%% Function: handle_info(Info, State) -> {noreply, State} |
+%%                                       {noreply, State, Timeout} |
+%%                                       {stop, Reason, State}
+%% Description: Handling all non call/cast messages
+%%--------------------------------------------------------------------
+handle_info(Info, State) ->
+    io:format("info=~p~n", [Info]),
+    {noreply, State}.
+
+%%--------------------------------------------------------------------
+%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
+%% Description: Convert process state when code is changed
+%%--------------------------------------------------------------------
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+%%--------------------------------------------------------------------
+%% Function: terminate(Reason, State) -> void()
+%% Description: This function is called by a gen_server when it is about to
+%% terminate. It should be the opposite of Module:init/1 and do any necessary
+%% cleaning up. When it returns, the gen_server terminates with Reason.
+%% The return value is ignored.
+%%--------------------------------------------------------------------
+terminate(_Reason, Sock) ->
+    io:format("terminate ~p~n", [self()]),
+    gen_tcp:close(Sock).
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+random_id() ->
+    crypto:start(),
+    list_to_atom("memcached_client" ++ integer_to_list(crypto:rand_uniform(1, 65536 * 65536))).
+
+
 init([Host, Port]) ->
     case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
         {ok, Socket} -> {ok, Socket};
