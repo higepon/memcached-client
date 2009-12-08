@@ -39,7 +39,9 @@
 
 %% API
 -export([connect/2, disconnect/1,
-         set/3, set/5, get/2,
+         set/3, set/5,
+         get/2,
+         replace/3, replace/5,
          delete/2, delete/3]).
 
 %% gen_server callbacks
@@ -80,9 +82,22 @@ set(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTi
 
 
 %%--------------------------------------------------------------------
+%% Function: replace
+%% Description: replace value
+%% Returns: ok, {error, not_stored} or {error, Reason}
+%%--------------------------------------------------------------------
+replace(Conn, Key, Value) when is_list(Key) ->
+    gen_server:call(Conn, {replace, Key, Value}).
+
+
+replace(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
+    gen_server:call(Conn, {replace, Key, Value, Flags, ExpTime}).
+
+
+%%--------------------------------------------------------------------
 %% Function: get
 %% Description: get value
-%% Returns: {ok, Value}, {ok, not_found} or {error, Reason}
+%% Returns: {ok, Value}, {error, not_found} or {error, Reason}
 %%--------------------------------------------------------------------
 get(Conn, Key) when is_list(Key) ->
     gen_server:call(Conn, {get, Key}).
@@ -111,7 +126,6 @@ disconnect(Conn) ->
 
 connect(Hosts, Ports, Fun) ->
     %% todo
-    %% Fun is
     ok.
 
 
@@ -129,7 +143,7 @@ handle_call({get, Key}, _From, Socket) ->
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, <<"END\r\n">>} ->
-            {reply, {ok, not_found}, Socket};
+            {reply, {error, not_found}, Socket};
         {ok, <<"ERROR\r\n">>} ->
             {reply, {error, "Error returned by server"}, Socket};
         {ok, Packet} ->
@@ -145,9 +159,15 @@ handle_call({get, Key}, _From, Socket) ->
 
 
 handle_call({set, Key, Value}, _From, Socket) ->
-    {reply, set_command(Socket, Key, Value, 0, 0), Socket};
+    {reply, storage_command(Socket, "set", Key, Value, 0, 0), Socket};
 handle_call({set, Key, Value, Flags, ExpTime}, _From, Socket) ->
-    {reply, set_command(Socket, Key, Value, Flags, ExpTime), Socket};
+    {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime), Socket};
+
+
+handle_call({replace, Key, Value}, _From, Socket) ->
+    {reply, storage_command(Socket, "replace", Key, Value, 0, 0), Socket};
+handle_call({replace, Key, Value, Flags, ExpTime}, _From, Socket) ->
+    {reply, storage_command(Socket, "replace", Key, Value, Flags, ExpTime), Socket};
 
 
 handle_call({delete, Key}, _From, Socket) ->
@@ -202,17 +222,19 @@ terminate(_Reason, Socket) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-set_command(Socket, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
+storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
     ValueAsBinary = term_to_binary(Value),
     Bytes = integer_to_list(size(ValueAsBinary)),
-    Command = iolist_to_binary([<<"set ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes]),
-    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes]),
+    gen_tcp:send(Socket, <<CommandAsBinary/binary, "\r\n">>),
     gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
             case string:tokens(binary_to_list(Packet), "\r\n") of
                 ["STORED"] ->
                     ok;
+                ["NOT_STORED"] ->
+                    {error, not_stored};
                 Other ->
                     {error, Other}
             end;

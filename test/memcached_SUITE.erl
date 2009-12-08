@@ -39,7 +39,7 @@ test_set_get(_Config) ->
 
 test_get_not_exist(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
-    {ok, not_found} = memcached:get(Conn, "not-exist"),
+    {error, not_found} = memcached:get(Conn, "not-exist"),
     ok = memcached:disconnect(Conn).
 
 
@@ -47,7 +47,7 @@ test_set_expiry(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:set(Conn, "mykey", "myvalue", 0, 1),
     receive after 1000 -> [] end,
-    {ok, not_found} = memcached:get(Conn, "mykey"),
+    {error, not_found} = memcached:get(Conn, "mykey"),
     ok = memcached:disconnect(Conn).
 
 
@@ -57,7 +57,7 @@ test_delete(_Config) ->
     {ok, "myvalue"} = memcached:get(Conn, "mykey"),
     ok = memcached:delete(Conn, "mykey"),
     {error, not_found} = memcached:delete(Conn, "not_found"),
-    {ok, not_found} = memcached:get(Conn, "mykey"),
+    {error, not_found} = memcached:get(Conn, "mykey"),
     ok = memcached:disconnect(Conn).
 
 
@@ -66,14 +66,23 @@ test_delete_with_time(_Config) ->
     ok = memcached:set(Conn, "mykey", "myvalue"),
     {ok, "myvalue"} = memcached:get(Conn, "mykey"),
     ok = memcached:delete(Conn, "mykey", 10),
-    {ok, not_found} = memcached:get(Conn, "mykey"),
+    {error, not_found} = memcached:get(Conn, "mykey"),
 
     %% Even with time option, set command will succeed.
     ok = memcached:set(Conn, "mykey", "myvalue"),
 
-    %% TODO: add, repace command will fail.
     ok = memcached:disconnect(Conn).
 
+
+test_replace(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:set(Conn, "mykey", "myvalue"),
+    ok = memcached:replace(Conn, "mykey", "mynewvalue"),
+    {ok, "mynewvalue"} = memcached:get(Conn, "mykey"),
+
+    %% key not_found doesn't exist, so replace never happen.
+    {error, not_stored} = memcached:replace(Conn, "not_found", "newvalue", 0, 0),
+    ok = memcached:disconnect(Conn).
 
 %% Tests end.
 all() ->
@@ -83,5 +92,6 @@ all() ->
      test_get_not_exist,
      test_set_expiry,
      test_delete,
-     test_delete_with_time
+     test_delete_with_time,
+     test_replace
     ].
