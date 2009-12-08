@@ -39,7 +39,8 @@
 
 %% API
 -export([connect/2, disconnect/1,
-        set/3, set/5, get/2, delete/2]).
+         set/3, set/5, get/2,
+         delete/2, delete/3]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -96,6 +97,10 @@ delete(Conn, Key) when is_list(Key) ->
     gen_server:call(Conn, {delete, Key}).
 
 
+delete(Conn, Key, Time) when is_list(Key) andalso is_integer(Time) ->
+    gen_server:call(Conn, {delete, Key, Time}).
+
+
 %%--------------------------------------------------------------------
 %% Function: disconnect
 %% Description: disconnect
@@ -141,27 +146,14 @@ handle_call({get, Key}, _From, Socket) ->
 
 handle_call({set, Key, Value}, _From, Socket) ->
     {reply, set_command(Socket, Key, Value, 0, 0), Socket};
-
-
 handle_call({set, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, set_command(Socket, Key, Value, Flags, ExpTime), Socket};
 
 
 handle_call({delete, Key}, _From, Socket) ->
-    Command = iolist_to_binary([<<"delete ">>, Key, <<" ">>, "0"]),
-    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, <<"DELETED\r\n">>} ->
-            {reply, ok, Socket};
-        {ok, <<"NOT_FOUND\r\n">>} ->
-            {reply, {error, not_found}, Socket};
-        {ok, <<"ERROR\r\n">>} ->
-            {reply, {error, "Error returned by server"}, Socket};
-        {ok, Other} ->
-            {reply, {error, binary_to_list(Other)}, Socket};
-        {error, Reason} ->
-            {reply, {error, Reason}, Socket}
-    end;
+    {reply, delete_command(Socket, Key, 0), Socket};
+handle_call({delete, Key, Time}, _From, Socket) ->
+    {reply, delete_command(Socket, Key, Time), Socket};
 
 
 handle_call(disconnect, _From, Socket) ->
@@ -224,6 +216,21 @@ set_command(Socket, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso i
                 Other ->
                     {error, Other}
             end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+
+delete_command(Socket, Key, Time) ->
+    Command = iolist_to_binary([<<"delete ">>, Key, <<" ">>, integer_to_list(Time)]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, <<"DELETED\r\n">>} ->
+            ok;
+        {ok, <<"NOT_FOUND\r\n">>} ->
+            {error, not_found};
+        {ok, Other} ->
+            {error, binary_to_list(Other)};
         {error, Reason} ->
             {error, Reason}
     end.
