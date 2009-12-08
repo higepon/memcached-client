@@ -20,10 +20,6 @@ suite() ->
 
 
 %% Tests start.
-test_set_get(_Config) ->
-    ok.
-
-
 test_connect_disconnect(_Config) ->
     {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
     ok = memcached:disconnect(Conn).
@@ -34,10 +30,23 @@ test_connect_error(_Config) ->
     {error, _} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT + 1).
 
 
+test_set_get(_Config) ->
+    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
+    ok = memcached:set(Conn, "mykey", "myvalue"),
+    {ok, "myvalue"} = memcached:get(Conn, "mykey"),
+    ok = memcached:disconnect(Conn).
+
+
+test_get_not_exist(_Config) ->
+    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
+    {ok, not_exist} = memcached:get(Conn, "not-exist"),
+    ok = memcached:disconnect(Conn).
+
+
 %% Tests end.
 all() ->
     [test_connect_disconnect,
      test_connect_error,
-     test_set_get
-     
+     test_set_get,
+     test_get_not_exist
     ].

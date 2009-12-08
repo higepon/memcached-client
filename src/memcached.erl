@@ -38,7 +38,8 @@
 -behaviour(gen_server).
 
 %% API
--export([connect/2, disconnect/1]).
+-export([connect/2, disconnect/1,
+        set/3, get/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -47,8 +48,9 @@
 %%====================================================================
 %% Definitions
 %%====================================================================
--define(TCP_OPTIONS, [binary, {packet, raw}, {nodelay, true}, {reuseaddr, true}, {active, true},
+-define(TCP_OPTIONS, [binary, {packet, raw}, {nodelay, true}, {reuseaddr, true}, {active, false},
                       {sndbuf,16384},{recbuf,4096}]).
+-define(TIMEOUT, 1000).
 
 %%====================================================================
 %% API
@@ -61,6 +63,25 @@
 connect(Host, Port) ->
     Name = random_id(),
     gen_server:start_link({local, Name}, ?MODULE, [Host, Port], []).
+
+
+%%--------------------------------------------------------------------
+%% Function: set
+%% Description: set value
+%% Returns: ok
+%%--------------------------------------------------------------------
+set(Conn, Key, Value) when is_list(Key) ->
+    gen_server:call(Conn, {set, Key, Value}).
+
+
+%%--------------------------------------------------------------------
+%% Function: get
+%% Description: get value
+%% Returns: {ok, Value}, {ok, not_exist} or {error, Reason}
+%%--------------------------------------------------------------------
+get(Conn, Key) when is_list(Key) ->
+    gen_server:call(Conn, {get, Key}).
+
 
 %%--------------------------------------------------------------------
 %% Function: disconnect
@@ -85,10 +106,45 @@ connect(Hosts, Ports, Fun) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
-handle_call(disconnect, _From, Sock) ->
-    io:format("here we are"),
-    gen_tcp:close(Sock),
-    {reply, ok, Sock}.
+handle_call({get, Key}, _From, Socket) ->
+    Command = iolist_to_binary([<<"get ">>, Key]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, <<"END\r\n">>} ->
+            {reply, {ok, not_exist}, Socket};
+        {ok, Packet} ->
+            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+            Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", binary_to_list(Packet)),
+            {ok, [_Key, _Flags, Bytes], Rest} = Parsed,
+            Value = binary_to_term(list_to_binary(Rest)),
+            {reply, {ok, Value}, Socket};
+        {error, Reason} ->
+            {reply, {error, Reason}, Socket}
+    end;
+
+
+handle_call({set, Key, Value}, _From, Socket) ->
+    ValueAsBinary = term_to_binary(Value),
+    Bytes = integer_to_list(size(ValueAsBinary)),
+    Command = iolist_to_binary([<<"set ">>, Key, <<" ">>, "0", <<" ">>, "0", <<" ">>, Bytes]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case string:tokens(binary_to_list(Packet), "\r\n") of
+                ["STORED"] ->
+                    {reply, ok, Socket};
+                Other ->
+                    {reply, {error, Other}, Socket}
+            end;
+        {error, Reason} ->
+            {reply, {error, Reason}, Socket}
+    end;
+
+
+handle_call(disconnect, _From, Socket) ->
+    gen_tcp:close(Socket),
+    {reply, ok, Socket}.
 
 
 %%--------------------------------------------------------------------
@@ -125,9 +181,9 @@ code_change(_OldVsn, State, _Extra) ->
 %% cleaning up. When it returns, the gen_server terminates with Reason.
 %% The return value is ignored.
 %%--------------------------------------------------------------------
-terminate(_Reason, Sock) ->
+terminate(_Reason, Socket) ->
     io:format("terminate ~p~n", [self()]),
-    gen_tcp:close(Sock).
+    gen_tcp:close(Socket).
 
 %%====================================================================
 %% Internal functions
