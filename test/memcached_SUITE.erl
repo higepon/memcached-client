@@ -43,10 +43,19 @@ test_get_not_exist(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_set_expiry(_Config) ->
+    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
+    ok = memcached:set(Conn, "mykey", "myvalue", 0, 1),
+    receive after 1000 -> [] end,
+    {ok, not_exist} = memcached:get(Conn, "mykey"),
+    ok = memcached:disconnect(Conn).
+
 %% Tests end.
 all() ->
     [test_connect_disconnect,
      test_connect_error,
      test_set_get,
-     test_get_not_exist
+     test_get_not_exist,
+     test_set_expiry
+
     ].

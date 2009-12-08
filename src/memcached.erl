@@ -39,7 +39,7 @@
 
 %% API
 -export([connect/2, disconnect/1,
-        set/3, get/2]).
+        set/3, set/5, get/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -72,6 +72,10 @@ connect(Host, Port) ->
 %%--------------------------------------------------------------------
 set(Conn, Key, Value) when is_list(Key) ->
     gen_server:call(Conn, {set, Key, Value}).
+
+
+set(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
+    gen_server:call(Conn, {set, Key, Value, Flags, ExpTime}).
 
 
 %%--------------------------------------------------------------------
@@ -124,22 +128,11 @@ handle_call({get, Key}, _From, Socket) ->
 
 
 handle_call({set, Key, Value}, _From, Socket) ->
-    ValueAsBinary = term_to_binary(Value),
-    Bytes = integer_to_list(size(ValueAsBinary)),
-    Command = iolist_to_binary([<<"set ">>, Key, <<" ">>, "0", <<" ">>, "0", <<" ">>, Bytes]),
-    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
-    gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, Packet} ->
-            case string:tokens(binary_to_list(Packet), "\r\n") of
-                ["STORED"] ->
-                    {reply, ok, Socket};
-                Other ->
-                    {reply, {error, Other}, Socket}
-            end;
-        {error, Reason} ->
-            {reply, {error, Reason}, Socket}
-    end;
+    {reply, set_command(Socket, Key, Value, 0, 0), Socket};
+
+
+handle_call({set, Key, Value, Flags, ExpTime}, _From, Socket) ->
+    {reply, set_command(Socket, Key, Value, Flags, ExpTime), Socket};
 
 
 handle_call(disconnect, _From, Socket) ->
@@ -188,10 +181,28 @@ terminate(_Reason, Socket) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+set_command(Socket, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
+    ValueAsBinary = term_to_binary(Value),
+    Bytes = integer_to_list(size(ValueAsBinary)),
+    Command = iolist_to_binary([<<"set ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case string:tokens(binary_to_list(Packet), "\r\n") of
+                ["STORED"] ->
+                    ok;
+                Other ->
+                    {error, Other}
+            end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+
 random_id() ->
     crypto:start(),
     list_to_atom("memcached_client" ++ integer_to_list(crypto:rand_uniform(1, 65536 * 65536))).
-
 
 init([Host, Port]) ->
     case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
