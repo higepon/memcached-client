@@ -39,7 +39,7 @@
 
 %% API
 -export([connect/2, disconnect/1,
-        set/3, set/5, get/2]).
+        set/3, set/5, get/2, delete/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -81,10 +81,19 @@ set(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTi
 %%--------------------------------------------------------------------
 %% Function: get
 %% Description: get value
-%% Returns: {ok, Value}, {ok, not_exist} or {error, Reason}
+%% Returns: {ok, Value}, {ok, not_found} or {error, Reason}
 %%--------------------------------------------------------------------
 get(Conn, Key) when is_list(Key) ->
     gen_server:call(Conn, {get, Key}).
+
+
+%%--------------------------------------------------------------------
+%% Function: delete
+%% Description: delete value
+%% Returns: ok
+%%--------------------------------------------------------------------
+delete(Conn, Key) when is_list(Key) ->
+    gen_server:call(Conn, {delete, Key}).
 
 
 %%--------------------------------------------------------------------
@@ -115,7 +124,7 @@ handle_call({get, Key}, _From, Socket) ->
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, <<"END\r\n">>} ->
-            {reply, {ok, not_exist}, Socket};
+            {reply, {ok, not_found}, Socket};
         {ok, <<"ERROR\r\n">>} ->
             {reply, {error, "Error returned by server"}, Socket};
         {ok, Packet} ->
@@ -136,6 +145,23 @@ handle_call({set, Key, Value}, _From, Socket) ->
 
 handle_call({set, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, set_command(Socket, Key, Value, Flags, ExpTime), Socket};
+
+
+handle_call({delete, Key}, _From, Socket) ->
+    Command = iolist_to_binary([<<"delete ">>, Key, <<" ">>, "0"]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, <<"DELETED\r\n">>} ->
+            {reply, ok, Socket};
+        {ok, <<"NOT_FOUND\r\n">>} ->
+            {reply, {error, not_found}, Socket};
+        {ok, <<"ERROR\r\n">>} ->
+            {reply, {error, "Error returned by server"}, Socket};
+        {ok, Other} ->
+            {reply, {error, binary_to_list(Other)}, Socket};
+        {error, Reason} ->
+            {reply, {error, Reason}, Socket}
+    end;
 
 
 handle_call(disconnect, _From, Socket) ->

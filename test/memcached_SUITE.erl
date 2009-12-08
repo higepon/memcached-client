@@ -11,6 +11,7 @@
 
 -include("ct.hrl").
 -define(MEMCACHED_PORT, 11411).
+-define(MEMCACHED_HOST, "127.0.0.1").
 
 suite() ->
     [{timetrap,{seconds,30}}].
@@ -18,37 +19,47 @@ suite() ->
 %% N.B. We can't use init_per_suite to share the connection,
 %% since init_per_suite and end_per_suite run on different processes.
 
-
 %% Tests start.
 test_connect_disconnect(_Config) ->
-    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:disconnect(Conn).
 
 
 test_connect_error(_Config) ->
     process_flag(trap_exit,true),
-    {error, _} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT + 1).
+    {error, _} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT + 1).
 
 
 test_set_get(_Config) ->
-    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:set(Conn, "mykey", "myvalue"),
     {ok, "myvalue"} = memcached:get(Conn, "mykey"),
     ok = memcached:disconnect(Conn).
 
 
 test_get_not_exist(_Config) ->
-    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
-    {ok, not_exist} = memcached:get(Conn, "not-exist"),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, not_found} = memcached:get(Conn, "not-exist"),
     ok = memcached:disconnect(Conn).
 
 
 test_set_expiry(_Config) ->
-    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:set(Conn, "mykey", "myvalue", 0, 1),
     receive after 1000 -> [] end,
-    {ok, not_exist} = memcached:get(Conn, "mykey"),
+    {ok, not_found} = memcached:get(Conn, "mykey"),
     ok = memcached:disconnect(Conn).
+
+
+test_delete(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:set(Conn, "mykey", "myvalue"),
+    {ok, "myvalue"} = memcached:get(Conn, "mykey"),
+    ok = memcached:delete(Conn, "mykey"),
+    {error, not_found} = memcached:delete(Conn, "not_found"),
+    {ok, not_found} = memcached:get(Conn, "mykey"),
+    ok = memcached:disconnect(Conn).
+
 
 %% Tests end.
 all() ->
@@ -56,6 +67,6 @@ all() ->
      test_connect_error,
      test_set_get,
      test_get_not_exist,
-     test_set_expiry
-
+     test_set_expiry,
+     test_delete
     ].
