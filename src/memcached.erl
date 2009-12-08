@@ -116,7 +116,10 @@ handle_call({get, Key}, _From, Socket) ->
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, <<"END\r\n">>} ->
             {reply, {ok, not_exist}, Socket};
+        {ok, <<"ERROR\r\n">>} ->
+            {reply, {error, "Error returned by server"}, Socket};
         {ok, Packet} ->
+            io:format("Packet=~p", [binary_to_list(Packet)]),
             %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
             Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", binary_to_list(Packet)),
             {ok, [_Key, _Flags, Bytes], Rest} = Parsed,
