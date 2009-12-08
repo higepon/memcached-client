@@ -15,28 +15,18 @@
 suite() ->
     [{timetrap,{seconds,30}}].
 
-
-init_per_suite(Config) ->
-    process_flag(trap_exit,true),
-    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
-    io:format("con0=~p ~n", [Conn]),
-    [{connection, Conn}].
-
-
-end_per_suite(Config) ->
-    Conn1 = proplists:get_value(connection, Config),
-    io:format("con1=~p  registered~p~n", [Conn1, registered()]),
-    {ok, Conn2} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
-    io:format("con1=~p ~p registered~p~n", [Conn1, Conn2, registered()]),
-
-    ok = memcached:disconnect(Conn2),
-    Config.
-
+%% N.B. We can't use init_per_suite to share the connection,
+%% since init_per_suite and end_per_suite run on different processes.
 
 
 %% Tests start.
 test_set_get(_Config) ->
     ok.
+
+
+test_connect_disconnect(_Config) ->
+    {ok, Conn} = memcached:connect("127.0.0.1", ?MEMCACHED_PORT),
+    ok = memcached:disconnect(Conn).
 
 
 test_connect_error(_Config) ->
@@ -46,8 +36,8 @@ test_connect_error(_Config) ->
 
 %% Tests end.
 all() ->
-    [test_set_get
-%     connect_error
-
+    [test_connect_disconnect,
+     test_connect_error,
+     test_set_get
+     
     ].
-
