@@ -181,6 +181,7 @@ handle_call({get_multi, Keys}, _From, Socket) ->
             {reply, {error, Reason}, Socket}
     end;
 
+
 handle_call({set, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, 0, 0), Socket};
 handle_call({set, Key, Value, Flags, ExpTime}, _From, Socket) ->
@@ -317,6 +318,7 @@ string_join(Join, [H|Q], Conv) ->
     lists:flatten(lists:concat(
         [Conv(H)|lists:map(fun(E) -> [Join, Conv(E)] end, Q)]
     )).
+
 
 init([Host, Port]) ->
     case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
