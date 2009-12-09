@@ -43,7 +43,6 @@ install: all
 dist: distclean
 	mkdir -p $(DIST_TARGET)
 	cp -r Makefile ebin src include README.md test $(DIST_TARGET)
-	chmod 0755 $(DIST_TARGET)/scripts/*
 	tar -zcf $(TARBALL_NAME).tar.gz $(DIST_TARGET)
 	rm -rf $(DIST_TMP_DIR)
 
