@@ -19,6 +19,7 @@ Follwing functions are currently supported.
 - delete/2, delete/3
 
 
+
     1> {ok, Conn} = memcached:connect("127.0.0.1", 11211).
     {ok,<0.40.0>}
     2> ok = memcached:set(Conn, "Hello", "World").
