@@ -84,6 +84,17 @@ test_replace(_Config) ->
     {error, not_stored} = memcached:replace(Conn, "not_found", "newvalue", 0, 0),
     ok = memcached:disconnect(Conn).
 
+
+test_get_multi(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:set(Conn, "mykey1", "myvalue1"),
+    ok = memcached:set(Conn, "mykey3", "myvalue3"),
+    {ok, [{"mykey1", "myvalue1"},
+          {"mykey3", "myvalue3"}]}
+        = memcached:get_multi(Conn, ["mykey1", "mykey2", "mykey3"]),
+    ok = memcached:disconnect(Conn).
+
+
 %% Tests end.
 all() ->
     [test_connect_disconnect,
@@ -93,5 +104,6 @@ all() ->
      test_set_expiry,
      test_delete,
      test_delete_with_time,
-     test_replace
+     test_replace,
+     test_get_multi
     ].

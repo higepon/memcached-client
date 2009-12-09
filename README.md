@@ -15,7 +15,7 @@ See [memcached_SUITE.erl](http://github.com/higepon/memcached-client/blob/master
 
 ### ToDo
 
-- Commands: add, cas, incr, decr, append, stats, prepend and get_multi.
+- Commands: add, cas, incr, decr, append, stats, prepend.
 - Mulitple servers with user defined Fun.
 - User defined serialization.
 - make install

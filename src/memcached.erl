@@ -40,7 +40,7 @@
 %% API
 -export([connect/2, disconnect/1,
          set/3, set/5,
-         get/2,
+         get/2, get_multi/2,
          replace/3, replace/5,
          delete/2, delete/3]).
 
@@ -104,6 +104,15 @@ get(Conn, Key) when is_list(Key) ->
 
 
 %%--------------------------------------------------------------------
+%% Function: get_multi
+%% Description: get multiple values
+%% Returns: {ok, Values}, Values = list of {Key, Value}.
+%%--------------------------------------------------------------------
+get_multi(Conn, Keys) when is_list(Keys) ->
+    gen_server:call(Conn, {get_multi, Keys}).
+
+
+%%--------------------------------------------------------------------
 %% Function: delete
 %% Description: delete value
 %% Returns: ok
@@ -147,7 +156,6 @@ handle_call({get, Key}, _From, Socket) ->
         {ok, <<"ERROR\r\n">>} ->
             {reply, {error, "Error returned by server"}, Socket};
         {ok, Packet} ->
-            io:format("Packet=~p", [binary_to_list(Packet)]),
             %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
             Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", binary_to_list(Packet)),
             {ok, [_Key, _Flags, Bytes], Rest} = Parsed,
@@ -157,6 +165,21 @@ handle_call({get, Key}, _From, Socket) ->
             {reply, {error, Reason}, Socket}
     end;
 
+
+handle_call({get_multi, Keys}, _From, Socket) ->
+    Command = iolist_to_binary([<<"get ">>, string_join(" ", Keys)]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case parse_values(binary_to_list(Packet), []) of
+                {ok, Values} ->
+                    {reply, {ok, Values}, Socket};
+                Other ->
+                    {reply, Other, Socket}
+            end;
+        {error, Reason} ->
+            {reply, {error, Reason}, Socket}
+    end;
 
 handle_call({set, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, 0, 0), Socket};
@@ -222,6 +245,28 @@ terminate(_Reason, Socket) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+parse_values(Data, Values) ->
+    case Data of
+        "END\r\n" ->
+            {ok, lists:reverse(Values)};
+        "ERROR\r\n" ->
+            {error, "Error returned by server"};
+        _ ->
+            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+            Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", Data),
+            {ok, [Key, _Flags, Bytes], Rest} = Parsed,
+            SepLen = length("\r\n"),
+            {Head, Tail}  = lists:split(Bytes + SepLen, Rest),
+
+            Value = binary_to_term(list_to_binary(Head)),
+            case Tail of
+                [] -> {ok, lists:reverse([{Key, Value} | Values])};
+                _ ->
+                    parse_values(Tail, [{Key, Value} | Values])
+            end
+    end.
+
+
 storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
     ValueAsBinary = term_to_binary(Value),
     Bytes = integer_to_list(size(ValueAsBinary)),
@@ -261,6 +306,17 @@ delete_command(Socket, Key, Time) ->
 random_id() ->
     crypto:start(),
     list_to_atom("memcached_client" ++ integer_to_list(crypto:rand_uniform(1, 65536 * 65536))).
+
+%% Borrowed from http://www.trapexit.org/String_join_with
+string_join(Join, L) ->
+    string_join(Join, L, fun(E) -> E end).
+
+string_join(_Join, L=[], _Conv) ->
+    L;
+string_join(Join, [H|Q], Conv) ->
+    lists:flatten(lists:concat(
+        [Conv(H)|lists:map(fun(E) -> [Join, Conv(E)] end, Q)]
+    )).
 
 init([Host, Port]) ->
     case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
