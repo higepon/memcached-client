@@ -9,17 +9,16 @@ I know another memcached client library merle already exists, but I write this l
   3. make check (memcached required)
   4. make install
 
-### Usage
-####
+### Functions
 Follwing functions are currently supported.
 
 - connect/2, disconnect/1
-- set/3, set/5,
-- get/2, get_multi/2,
-- replace/3, replace/5,
+- set/3, set/5
+- get/2, get_multi/2
+- replace/3, replace/5
 - delete/2, delete/3
 
-####
+### How to use
 
     1> {ok, Conn} = memcached:connect("127.0.0.1", 11211).
     {ok,<0.40.0>}
