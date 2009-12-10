@@ -16,6 +16,7 @@ Follwing functions are currently supported.
 - set/3, set/5
 - get/2, get_multi/2
 - replace/3, replace/5
+- add/3, add/5
 - delete/2, delete/3
 
 ### How to use
@@ -40,7 +41,7 @@ See more examples on [memcached_SUITE.erl](http://github.com/higepon/memcached-c
 
 ### ToDo
 
-- Commands: add, cas, incr, decr, append, stats, prepend.
+- Commands: cas, incr, decr, append, stats, prepend.
 - Mulitple servers with user defined Fun.
 - User defined serialization.
 - documentation

@@ -42,6 +42,7 @@
          set/3, set/5,
          get/2, get_multi/2,
          replace/3, replace/5,
+         add/3, add/5,
          delete/2, delete/3]).
 
 %% gen_server callbacks
@@ -92,6 +93,19 @@ replace(Conn, Key, Value) when is_list(Key) ->
 
 replace(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
     gen_server:call(Conn, {replace, Key, Value, Flags, ExpTime}).
+
+
+%%--------------------------------------------------------------------
+%% Function: add
+%% Description: add value
+%% Returns: ok, {error, not_stored} or {error, Reason}
+%%--------------------------------------------------------------------
+add(Conn, Key, Value) when is_list(Key) ->
+    gen_server:call(Conn, {add, Key, Value}).
+
+
+add(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
+    gen_server:call(Conn, {add, Key, Value, Flags, ExpTime}).
 
 
 %%--------------------------------------------------------------------
@@ -192,6 +206,12 @@ handle_call({replace, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "replace", Key, Value, 0, 0), Socket};
 handle_call({replace, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, storage_command(Socket, "replace", Key, Value, Flags, ExpTime), Socket};
+
+
+handle_call({add, Key, Value}, _From, Socket) ->
+    {reply, storage_command(Socket, "add", Key, Value, 0, 0), Socket};
+handle_call({add, Key, Value, Flags, ExpTime}, _From, Socket) ->
+    {reply, storage_command(Socket, "add", Key, Value, Flags, ExpTime), Socket};
 
 
 handle_call({delete, Key}, _From, Socket) ->

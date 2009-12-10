@@ -95,15 +95,23 @@ test_get_multi(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_add(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:add(Conn, "myaddkey", "myvalue1"),
+    {error, not_stored} = memcached:add(Conn, "myaddkey", "newvalue"),
+    ok = memcached:disconnect(Conn).
+
+
 %% Tests end.
 all() ->
     [test_connect_disconnect,
      test_connect_error,
      test_set_get,
      test_get_not_exist,
+     test_get_multi,
      test_set_expiry,
      test_delete,
      test_delete_with_time,
      test_replace,
-     test_get_multi
+     test_add
     ].
