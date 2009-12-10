@@ -61,19 +61,6 @@ test_delete(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
-test_delete_with_time(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
-    ok = memcached:set(Conn, "mykey", "myvalue"),
-    {ok, "myvalue"} = memcached:get(Conn, "mykey"),
-    ok = memcached:delete(Conn, "mykey", 10),
-    {error, not_found} = memcached:get(Conn, "mykey"),
-
-    %% Even with time option, set command will succeed.
-    ok = memcached:set(Conn, "mykey", "myvalue"),
-
-    ok = memcached:disconnect(Conn).
-
-
 test_replace(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:set(Conn, "mykey", "myvalue"),
@@ -102,6 +89,15 @@ test_add(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_append(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {error, not_stored} = memcached:append(Conn, "appendkey", "a"),
+    ok = memcached:set(Conn, "appendkey", "a"),
+    ok = memcached:append(Conn, "appendkey", "a"),
+    {ok, _} = memcached:get(Conn, "appendkey"),
+    ok = memcached:disconnect(Conn).
+
+
 %% Tests end.
 all() ->
     [test_connect_disconnect,
@@ -111,7 +107,7 @@ all() ->
      test_get_multi,
      test_set_expiry,
      test_delete,
-     test_delete_with_time,
      test_replace,
-     test_add
+     test_add,
+     test_append
     ].

@@ -17,7 +17,7 @@ Follwing functions are currently supported.
 - get/2, get_multi/2
 - replace/3, replace/5
 - add/3, add/5
-- delete/2, delete/3
+- delete/2
 
 ### How to use
 

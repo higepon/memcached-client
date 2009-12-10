@@ -43,7 +43,8 @@
          get/2, get_multi/2,
          replace/3, replace/5,
          add/3, add/5,
-         delete/2, delete/3]).
+         append/3,
+         delete/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -109,6 +110,15 @@ add(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTi
 
 
 %%--------------------------------------------------------------------
+%% Function: append
+%% Description: append value
+%% Returns: ok, {error, not_stored} or {error, Reason}
+%%--------------------------------------------------------------------
+append(Conn, Key, Value) when is_list(Key) ->
+    gen_server:call(Conn, {append, Key, Value}).
+
+
+%%--------------------------------------------------------------------
 %% Function: get
 %% Description: get value
 %% Returns: {ok, Value}, {error, not_found} or {error, Reason}
@@ -133,10 +143,6 @@ get_multi(Conn, Keys) when is_list(Keys) ->
 %%--------------------------------------------------------------------
 delete(Conn, Key) when is_list(Key) ->
     gen_server:call(Conn, {delete, Key}).
-
-
-delete(Conn, Key, Time) when is_list(Key) andalso is_integer(Time) ->
-    gen_server:call(Conn, {delete, Key, Time}).
 
 
 %%--------------------------------------------------------------------
@@ -168,7 +174,7 @@ handle_call({get, Key}, _From, Socket) ->
         {ok, <<"END\r\n">>} ->
             {reply, {error, not_found}, Socket};
         {ok, <<"ERROR\r\n">>} ->
-            {reply, {error, "Error returned by server"}, Socket};
+            {reply, {error, unknown_command}, Socket};
         {ok, Packet} ->
             %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
             Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", binary_to_list(Packet)),
@@ -214,10 +220,12 @@ handle_call({add, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, storage_command(Socket, "add", Key, Value, Flags, ExpTime), Socket};
 
 
+handle_call({append, Key, Value}, _From, Socket) ->
+    {reply, storage_command(Socket, "append", Key, Value, 0, 0), Socket};
+
+
 handle_call({delete, Key}, _From, Socket) ->
-    {reply, delete_command(Socket, Key, 0), Socket};
-handle_call({delete, Key, Time}, _From, Socket) ->
-    {reply, delete_command(Socket, Key, Time), Socket};
+    {reply, delete_command(Socket, Key), Socket};
 
 
 handle_call(disconnect, _From, Socket) ->
@@ -271,7 +279,7 @@ parse_values(Data, Values) ->
         "END\r\n" ->
             {ok, lists:reverse(Values)};
         "ERROR\r\n" ->
-            {error, "Error returned by server"};
+            {error, unknown_command};
         _ ->
             %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
             Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", Data),
@@ -301,7 +309,13 @@ storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Fla
                     ok;
                 ["NOT_STORED"] ->
                     {error, not_stored};
+                ["ERROR"] ->
+                    {error, unknown_command};
+                %% memcached returns this for append command.
+                ["ERROR", "ERROR"] ->
+                    {error, unknown_command};
                 Other ->
+                    io:format("Other=~p~n", [Other]),
                     {error, Other}
             end;
         {error, Reason} ->
@@ -309,8 +323,9 @@ storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Fla
     end.
 
 
-delete_command(Socket, Key, Time) ->
-    Command = iolist_to_binary([<<"delete ">>, Key, <<" ">>, integer_to_list(Time)]),
+%% memcached 1.4.0 or higher doesn't support time argument.
+delete_command(Socket, Key) ->
+    Command = iolist_to_binary([<<"delete ">>, Key]),
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, <<"DELETED\r\n">>} ->
