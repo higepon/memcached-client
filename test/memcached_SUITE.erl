@@ -98,6 +98,15 @@ test_append(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_prepend(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {error, not_stored} = memcached:prepend(Conn, "prependkey", "a"),
+    ok = memcached:set(Conn, "prependkey", "a"),
+    ok = memcached:prepend(Conn, "prependkey", "a"),
+    {ok, _} = memcached:get(Conn, "prependkey"),
+    ok = memcached:disconnect(Conn).
+
+
 %% Tests end.
 all() ->
     [test_connect_disconnect,
@@ -109,5 +118,6 @@ all() ->
      test_delete,
      test_replace,
      test_add,
-     test_append
+     test_append,
+     test_prepend
     ].

@@ -43,7 +43,7 @@
          get/2, get_multi/2,
          replace/3, replace/5,
          add/3, add/5,
-         append/3,
+         append/3, prepend/3,
          delete/2]).
 
 %% gen_server callbacks
@@ -116,6 +116,15 @@ add(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTi
 %%--------------------------------------------------------------------
 append(Conn, Key, Value) when is_list(Key) ->
     gen_server:call(Conn, {append, Key, Value}).
+
+
+%%--------------------------------------------------------------------
+%% Function: prepend
+%% Description: prepend value
+%% Returns: ok, {error, not_stored} or {error, Reason}
+%%--------------------------------------------------------------------
+prepend(Conn, Key, Value) when is_list(Key) ->
+    gen_server:call(Conn, {prepend, Key, Value}).
 
 
 %%--------------------------------------------------------------------
@@ -222,6 +231,8 @@ handle_call({add, Key, Value, Flags, ExpTime}, _From, Socket) ->
 
 handle_call({append, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "append", Key, Value, 0, 0), Socket};
+handle_call({prepend, Key, Value}, _From, Socket) ->
+    {reply, storage_command(Socket, "prepend", Key, Value, 0, 0), Socket};
 
 
 handle_call({delete, Key}, _From, Socket) ->
