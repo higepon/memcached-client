@@ -13,12 +13,13 @@ I know another memcached client library merle already exists, but I write this l
 Follwing functions are currently supported.
 
 - connect/2, disconnect/1
-- set/3, set/5
-- get/2, get_multi/2
+- set/3, set/5, setb/3, setb/5
+- get/2, getb/2
+- get_multi/2, get_multib/2
 - replace/3, replace/5
 - add/3, add/5
 - append/3, prepend/3
-- delete/2
+-delete/2
 
 ### How to use
 
@@ -34,8 +35,14 @@ Follwing functions are currently supported.
     ok
     6> {error, not_found} = memcached:get(Conn, "Say").
     {error,not_found}
-    7> ok = memcached:disconnect(Conn).
+    7> ok = memcached:setb(Conn, "mydata", <<10:64/little>>).
     ok
+    8> memcached:getb(Conn, "mydata").
+    {ok,<<10,0,0,0,0,0,0,0>>}
+    9> ok = memcached:disconnect(Conn).
+    ok  
+
+
 
 
 See more examples on [memcached_SUITE.erl](http://github.com/higepon/memcached-client/blob/master/test/memcached_SUITE.erl).
