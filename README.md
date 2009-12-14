@@ -51,7 +51,6 @@ See more examples on [memcached_SUITE.erl](http://github.com/higepon/memcached-c
 
 - Commands: cas, incr, decr, stats.
 - Mulitple servers with user defined Fun.
-- User defined serialization.
 - documentation
 
 ### How To Contribute
