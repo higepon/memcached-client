@@ -30,6 +30,7 @@ $(EBIN_DIR)/%.beam: $(SOURCE_DIR)/%.erl
 	erlc -pa $(EBIN_DIR) $(ERLC_FLAGS) -I$(INCLUDE_DIR) -o$(EBIN_DIR) $<
 
 check: all
+	pgrep -lf memcached |grep 11411 || false
 	@memcached -d -p 11411 -P ${PID_FILE}
 	@erl -pa `pwd`/ebin -eval 'io:format("~p", [ct:run_test([{auto_compile, true}, {dir, "./test"}, {logdir, "./log"}, {refresh_logs, "./log"}, {cover, "./src/coverspec"}])]).' -s init stop
 	@kill `cat ${PID_FILE}`

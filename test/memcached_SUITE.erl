@@ -37,6 +37,14 @@ test_set_get(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_setb_getb(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:setb(Conn, "bin_key", <<10:64/little>>),
+    io:format("aval=~p~n", [<<10:64/little>>]),
+    {ok,  <<10:64/little>>} = memcached:getb(Conn, "bin_key"),
+    ok = memcached:disconnect(Conn).
+
+
 test_get_not_exist(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     {error, not_found} = memcached:get(Conn, "not-exist"),
@@ -106,18 +114,36 @@ test_prepend(_Config) ->
     {ok, _} = memcached:get(Conn, "prependkey"),
     ok = memcached:disconnect(Conn).
 
+test_split(_Config) ->
+    case memcached:split("abc\r\n\ndef\r\nxy") of
+    {Head, Tail} ->
+            Head = "abc",
+            Tail = "\ndef\r\nxy"
+    end.
+
+%% test_decr(_Config) ->
+%%     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+%%     ok = memcached:setb(Conn, "decr_key", <<10:64/little>>),
+%%     {ok, 3} = memcached:decr(Conn, "decr_key", <<1:64/little>>),
+%%     ok = memcached:disconnect(Conn).
+
+%% todo decr, bad value -> 0
 
 %% Tests end.
 all() ->
-    [test_connect_disconnect,
+    [
+test_connect_disconnect,
      test_connect_error,
      test_set_get,
+     test_setb_getb,
      test_get_not_exist,
      test_get_multi,
      test_set_expiry,
      test_delete,
      test_replace,
      test_add,
+     test_split,
      test_append,
      test_prepend
-    ].
+%%     test_decr
+].

@@ -39,12 +39,15 @@
 
 %% API
 -export([connect/2, disconnect/1,
-         set/3, set/5,
-         get/2, get_multi/2,
+         set/3, set/5, setb/3,%% setb/5,
+         get/2, get_multi/2, getb/2,
          replace/3, replace/5,
          add/3, add/5,
          append/3, prepend/3,
-         delete/2]).
+         delete/2,
+         decr/3,
+         split/1
+        ]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -81,6 +84,15 @@ set(Conn, Key, Value) when is_list(Key) ->
 
 set(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
     gen_server:call(Conn, {set, Key, Value, Flags, ExpTime}).
+
+
+%%--------------------------------------------------------------------
+%% Function: setb
+%% Description: set binary value
+%% Returns: ok
+%%--------------------------------------------------------------------
+setb(Conn, Key, Value) when is_list(Key) andalso is_binary(Value) ->
+    gen_server:call(Conn, {setb, Key, Value}).
 
 
 %%--------------------------------------------------------------------
@@ -137,6 +149,14 @@ get(Conn, Key) when is_list(Key) ->
 
 
 %%--------------------------------------------------------------------
+%% Function: getb
+%% Description: get value as binary
+%% Returns: {ok, Value}, {error, not_found} or {error, Reason}
+%%--------------------------------------------------------------------
+getb(Conn, Key) when is_list(Key) ->
+    gen_server:call(Conn, {getb, Key}).
+
+%%--------------------------------------------------------------------
 %% Function: get_multi
 %% Description: get multiple values
 %% Returns: {ok, Values}, Values = list of {Key, Value}.
@@ -152,6 +172,15 @@ get_multi(Conn, Keys) when is_list(Keys) ->
 %%--------------------------------------------------------------------
 delete(Conn, Key) when is_list(Key) ->
     gen_server:call(Conn, {delete, Key}).
+
+
+%%--------------------------------------------------------------------
+%% Function: decr
+%% Description: decr value
+%% Returns: {ok, NewValue}
+%%--------------------------------------------------------------------
+decr(Conn, Key, Value) ->
+    gen_server:call(Conn, {decr, Key, Value}).
 
 
 %%--------------------------------------------------------------------
@@ -187,11 +216,35 @@ handle_call({get, Key}, _From, Socket) ->
         {ok, Packet} ->
             %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
             Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", binary_to_list(Packet)),
-            {ok, [_Key, _Flags, Bytes], Rest} = Parsed,
+            {ok, [_Key, _Flags, _Bytes], Rest} = Parsed,
             Value = binary_to_term(list_to_binary(Rest)),
             {reply, {ok, Value}, Socket};
         {error, Reason} ->
             {reply, {error, Reason}, Socket}
+    end;
+
+handle_call({getb, Key}, _From, Socket) ->
+    Command = iolist_to_binary([<<"get ">>, Key]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, <<"END\r\n">>} ->
+            {reply, {error, not_found}, Socket};
+        {ok, <<"ERROR\r\n">>} ->
+            {reply, {error, unknown_command}, Socket};
+        {ok, Packet} ->
+            io:format("Packet=~p~n", [Packet]),
+            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+            %% N.B. we can't use io_lib:fread, since it can't handle \r\n.
+            case split(binary_to_list(Packet)) of
+                {error, Reason} ->
+                    {reply, {error, Reason}, Socket};
+                {Head, Tail} ->
+                    io:format("Head=~p Tail=~p~n", [Head, Tail]),
+                    {ok, [_Key, _Flags, Bytes], []} = io_lib:fread("VALUE ~s ~u ~u", Head),
+                    {ValueList, _}  = lists:split(Bytes, Tail),
+                    Value = list_to_binary(ValueList),
+                    {reply, {ok, Value}, Socket}
+            end
     end;
 
 
@@ -217,6 +270,9 @@ handle_call({set, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime), Socket};
 
 
+handle_call({setb, Key, Value}, _From, Socket) ->
+    {reply, storage_command2(Socket, "set", Key, Value, 0, 0), Socket};
+
 handle_call({replace, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "replace", Key, Value, 0, 0), Socket};
 handle_call({replace, Key, Value, Flags, ExpTime}, _From, Socket) ->
@@ -237,6 +293,10 @@ handle_call({prepend, Key, Value}, _From, Socket) ->
 
 handle_call({delete, Key}, _From, Socket) ->
     {reply, delete_command(Socket, Key), Socket};
+
+
+handle_call({decr, Key, Value}, _From, Socket) ->
+    {reply, decr_command(Socket, Key, Value), Socket};
 
 
 handle_call(disconnect, _From, Socket) ->
@@ -333,6 +393,33 @@ storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Fla
             {error, Reason}
     end.
 
+storage_command2(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
+    ValueAsBinary = Value,
+    Bytes = integer_to_list(size(ValueAsBinary)),
+    CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes]),
+    gen_tcp:send(Socket, <<CommandAsBinary/binary, "\r\n">>),
+    gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case string:tokens(binary_to_list(Packet), "\r\n") of
+                ["STORED"] ->
+                    ok;
+                ["NOT_STORED"] ->
+                    {error, not_stored};
+                ["ERROR"] ->
+                    {error, unknown_command};
+                %% memcached returns this for append command.
+                ["ERROR", "ERROR"] ->
+                    {error, unknown_command};
+                Other ->
+                    io:format("Other=~p~n", [Other]),
+                    {error, Other}
+            end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+
 
 %% memcached 1.4.0 or higher doesn't support time argument.
 delete_command(Socket, Key) ->
@@ -345,6 +432,21 @@ delete_command(Socket, Key) ->
             {error, not_found};
         {ok, Other} ->
             {error, binary_to_list(Other)};
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+
+decr_command(Socket, Key, Value) ->
+    Command = iolist_to_binary([<<"decr ">>, Key, " ", Value]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, <<"NOT_FOUND\r\n">>} ->
+            {error, not_found};
+        {ok, Packet} ->
+            Parsed = io_lib:fread("~d\r\n", binary_to_list(Packet)),
+            {ok, [NewValue], _Rest} = Parsed,
+            {error, NewValue};
         {error, Reason} ->
             {error, Reason}
     end.
@@ -374,3 +476,20 @@ init([Host, Port]) ->
         Other ->
             {stop, Other}
     end.
+
+split(Head, S) ->
+    case S of
+        %% "\r\n"
+        [13 | [10 | More]] ->
+            {lists:reverse(Head), More};
+        [] ->
+            {error, not_found};
+        [H | T] ->
+            split([H | Head], T)
+    end.
+
+%% split string with "\r\n"
+split(S) ->
+    split([], S).
+
+
