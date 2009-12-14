@@ -232,34 +232,28 @@ handle_call({get_multi, Keys}, _From, Socket) ->
     end;
 
 
-handle_call({set, Key, Value}, _From, Socket) ->
+handle_call({setb, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, 0, 0), Socket};
-handle_call({set, Key, Value, Flags, ExpTime}, _From, Socket) ->
+handle_call({setb, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime), Socket};
 
 
-handle_call({setb, Key, Value}, _From, Socket) ->
-    {reply, storage_command2(Socket, "set", Key, Value, 0, 0), Socket};
-handle_call({setb, Key, Value, Flags, ExpTime}, _From, Socket) ->
-    {reply, storage_command2(Socket, "set", Key, Value, Flags, ExpTime), Socket};
-
-
 handle_call({replace, Key, Value}, _From, Socket) ->
-    {reply, storage_command(Socket, "replace", Key, Value, 0, 0), Socket};
+    {reply, storage_command(Socket, "replace", Key, term_to_binary(Value), 0, 0), Socket};
 handle_call({replace, Key, Value, Flags, ExpTime}, _From, Socket) ->
-    {reply, storage_command(Socket, "replace", Key, Value, Flags, ExpTime), Socket};
+    {reply, storage_command(Socket, "replace", Key, term_to_binary(Value), Flags, ExpTime), Socket};
 
 
 handle_call({add, Key, Value}, _From, Socket) ->
-    {reply, storage_command(Socket, "add", Key, Value, 0, 0), Socket};
+    {reply, storage_command(Socket, "add", Key, term_to_binary(Value), 0, 0), Socket};
 handle_call({add, Key, Value, Flags, ExpTime}, _From, Socket) ->
-    {reply, storage_command(Socket, "add", Key, Value, Flags, ExpTime), Socket};
+    {reply, storage_command(Socket, "add", Key, term_to_binary(Value), Flags, ExpTime), Socket};
 
 
 handle_call({append, Key, Value}, _From, Socket) ->
-    {reply, storage_command(Socket, "append", Key, Value, 0, 0), Socket};
+    {reply, storage_command(Socket, "append", Key, term_to_binary(Value), 0, 0), Socket};
 handle_call({prepend, Key, Value}, _From, Socket) ->
-    {reply, storage_command(Socket, "prepend", Key, Value, 0, 0), Socket};
+    {reply, storage_command(Socket, "prepend", Key, term_to_binary(Value), 0, 0), Socket};
 
 
 handle_call({delete, Key}, _From, Socket) ->
@@ -339,32 +333,6 @@ parse_values(Data, Values) ->
 
 
 storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
-    ValueAsBinary = term_to_binary(Value),
-    Bytes = integer_to_list(size(ValueAsBinary)),
-    CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes]),
-    gen_tcp:send(Socket, <<CommandAsBinary/binary, "\r\n">>),
-    gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, Packet} ->
-            case string:tokens(binary_to_list(Packet), "\r\n") of
-                ["STORED"] ->
-                    ok;
-                ["NOT_STORED"] ->
-                    {error, not_stored};
-                ["ERROR"] ->
-                    {error, unknown_command};
-                %% memcached returns this for append command.
-                ["ERROR", "ERROR"] ->
-                    {error, unknown_command};
-                Other ->
-                    io:format("Other=~p~n", [Other]),
-                    {error, Other}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
-
-storage_command2(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
     ValueAsBinary = Value,
     Bytes = integer_to_list(size(ValueAsBinary)),
     CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes]),
