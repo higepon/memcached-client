@@ -39,8 +39,9 @@
 
 %% API
 -export([connect/2, disconnect/1,
-         set/3, set/5, setb/3,%% setb/5,
-         get/2, get_multi/2, getb/2,
+         set/3, set/5, setb/3, setb/5,
+         get/2, getb/2,
+         get_multi/2, get_multib/2,
          replace/3, replace/5,
          add/3, add/5,
          append/3, prepend/3,
@@ -155,6 +156,7 @@ get(Conn, Key) when is_list(Key) ->
 getb(Conn, Key) when is_list(Key) ->
     gen_server:call(Conn, {getb, Key}).
 
+
 %%--------------------------------------------------------------------
 %% Function: get_multi
 %% Description: get multiple values
@@ -163,6 +165,14 @@ getb(Conn, Key) when is_list(Key) ->
 get_multi(Conn, Keys) when is_list(Keys) ->
     gen_server:call(Conn, {get_multi, Keys}).
 
+
+%%--------------------------------------------------------------------
+%% Function: get_multib
+%% Description: get multiple binary values
+%% Returns: {ok, Values}, Values = list of {Key, Value}.
+%%--------------------------------------------------------------------
+get_multib(Conn, Keys) when is_list(Keys) ->
+    gen_server:call(Conn, {get_multib, Keys}).
 
 %%--------------------------------------------------------------------
 %% Function: delete
@@ -222,6 +232,23 @@ handle_call({get_multi, Keys}, _From, Socket) ->
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
             case parse_values(binary_to_list(Packet), []) of
+                {ok, BinValues} ->
+                    Values = lists:map(fun({Key, Value}) -> {Key, binary_to_term(Value)} end, BinValues),
+                    {reply, {ok, Values}, Socket};
+                Other ->
+                    {reply, Other, Socket}
+            end;
+        {error, Reason} ->
+            {reply, {error, Reason}, Socket}
+    end;
+
+
+handle_call({get_multib, Keys}, _From, Socket) ->
+    Command = iolist_to_binary([<<"get ">>, string_join(" ", Keys)]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case parse_values(binary_to_list(Packet), []) of
                 {ok, Values} ->
                     {reply, {ok, Values}, Socket};
                 Other ->
@@ -230,6 +257,7 @@ handle_call({get_multi, Keys}, _From, Socket) ->
         {error, Reason} ->
             {reply, {error, Reason}, Socket}
     end;
+
 
 
 handle_call({setb, Key, Value}, _From, Socket) ->
@@ -318,18 +346,22 @@ parse_values(Data, Values) ->
             {error, unknown_command};
         _ ->
             %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
-            Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", Data),
-            {ok, [Key, _Flags, Bytes], Rest} = Parsed,
-            SepLen = length("\r\n"),
-            {Head, Tail}  = lists:split(Bytes + SepLen, Rest),
-
-            Value = binary_to_term(list_to_binary(Head)),
-            case Tail of
-                [] -> {ok, lists:reverse([{Key, Value} | Values])};
-                _ ->
-                    parse_values(Tail, [{Key, Value} | Values])
+            case split(Data) of
+                {error, Reason} ->
+                    {error, Reason};
+                {Head, Tail} ->
+                    Parsed = io_lib:fread("VALUE ~s ~u ~u", Head),
+                    {ok, [Key, _Flags, Bytes], []} = Parsed,
+                    {ValueList, Rest}  = lists:split(Bytes, Tail),
+                    Value = list_to_binary(ValueList),
+                    case Rest of
+                        [] -> {ok, lists:reverse([{Key, Value} | Values])};
+                        [13 | [10 | R]] ->
+                            parse_values(R, [{Key, Value} | Values])
+                    end
             end
     end.
+
 
 
 storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->

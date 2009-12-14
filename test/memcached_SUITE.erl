@@ -90,6 +90,16 @@ test_get_multi(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_get_multib(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:setb(Conn, "mykey1b", <<10:64/little>>),
+    ok = memcached:setb(Conn, "mykey3b", <<13:64/little>>),
+    {ok, [{"mykey1b", <<10:64/little>>},
+          {"mykey3b", <<13:64/little>>}]}
+        = memcached:get_multib(Conn, ["mykey1b", "mykey2b", "mykey3b"]),
+    ok = memcached:disconnect(Conn).
+
+
 test_add(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:add(Conn, "myaddkey", "myvalue1"),
@@ -138,6 +148,7 @@ test_connect_disconnect,
      test_setb_getb,
      test_get_not_exist,
      test_get_multi,
+     test_get_multib,
      test_set_expiry,
      test_delete,
      test_replace,
