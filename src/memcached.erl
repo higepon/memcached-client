@@ -78,13 +78,10 @@ connect(Host, Port) ->
 %% Description: set value
 %% Returns: ok
 %%--------------------------------------------------------------------
-set(Conn, Key, Value) when is_list(Key) ->
-    gen_server:call(Conn, {set, Key, Value}).
-
-
-set(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
-    gen_server:call(Conn, {set, Key, Value, Flags, ExpTime}).
-
+set(Conn, Key, Value) ->
+    setb(Conn, Key, term_to_binary(Value)).
+set(Conn, Key, Value, Flags, ExpTime) ->
+    setb(Conn, Key, term_to_binary(Value), Flags, ExpTime).
 
 %%--------------------------------------------------------------------
 %% Function: setb
@@ -93,6 +90,8 @@ set(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTi
 %%--------------------------------------------------------------------
 setb(Conn, Key, Value) when is_list(Key) andalso is_binary(Value) ->
     gen_server:call(Conn, {setb, Key, Value}).
+setb(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_binary(Value) andalso is_integer(Flags) andalso is_integer(ExpTime) ->
+    gen_server:call(Conn, {setb, Key, Value, Flags, ExpTime}).
 
 
 %%--------------------------------------------------------------------
@@ -272,6 +271,9 @@ handle_call({set, Key, Value, Flags, ExpTime}, _From, Socket) ->
 
 handle_call({setb, Key, Value}, _From, Socket) ->
     {reply, storage_command2(Socket, "set", Key, Value, 0, 0), Socket};
+handle_call({setb, Key, Value, Flags, ExpTime}, _From, Socket) ->
+    {reply, storage_command2(Socket, "set", Key, Value, Flags, ExpTime), Socket};
+
 
 handle_call({replace, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "replace", Key, Value, 0, 0), Socket};
