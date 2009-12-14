@@ -205,46 +205,15 @@ connect(Hosts, Ports, Fun) ->
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
 handle_call({get, Key}, _From, Socket) ->
-    Command = iolist_to_binary([<<"get ">>, Key]),
-    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, <<"END\r\n">>} ->
-            {reply, {error, not_found}, Socket};
-        {ok, <<"ERROR\r\n">>} ->
-            {reply, {error, unknown_command}, Socket};
-        {ok, Packet} ->
-            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
-            Parsed = io_lib:fread("VALUE ~s ~u ~u\r\n", binary_to_list(Packet)),
-            {ok, [_Key, _Flags, _Bytes], Rest} = Parsed,
-            Value = binary_to_term(list_to_binary(Rest)),
+    case get_command(Socket, Key) of
+        {ok, BinaryValue} ->
+            Value = binary_to_term(BinaryValue),
             {reply, {ok, Value}, Socket};
-        {error, Reason} ->
-            {reply, {error, Reason}, Socket}
+        Other ->
+            {reply, Other, Socket}
     end;
-
 handle_call({getb, Key}, _From, Socket) ->
-    Command = iolist_to_binary([<<"get ">>, Key]),
-    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, <<"END\r\n">>} ->
-            {reply, {error, not_found}, Socket};
-        {ok, <<"ERROR\r\n">>} ->
-            {reply, {error, unknown_command}, Socket};
-        {ok, Packet} ->
-            io:format("Packet=~p~n", [Packet]),
-            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
-            %% N.B. we can't use io_lib:fread, since it can't handle \r\n.
-            case split(binary_to_list(Packet)) of
-                {error, Reason} ->
-                    {reply, {error, Reason}, Socket};
-                {Head, Tail} ->
-                    io:format("Head=~p Tail=~p~n", [Head, Tail]),
-                    {ok, [_Key, _Flags, Bytes], []} = io_lib:fread("VALUE ~s ~u ~u", Head),
-                    {ValueList, _}  = lists:split(Bytes, Tail),
-                    Value = list_to_binary(ValueList),
-                    {reply, {ok, Value}, Socket}
-            end
-    end;
+    {reply, get_command(Socket, Key), Socket};
 
 
 handle_call({get_multi, Keys}, _From, Socket) ->
@@ -438,6 +407,28 @@ delete_command(Socket, Key) ->
             {error, Reason}
     end.
 
+get_command(Socket, Key) ->
+    Command = iolist_to_binary([<<"get ">>, Key]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, <<"END\r\n">>} ->
+            {error, not_found};
+        {ok, <<"ERROR\r\n">>} ->
+            {error, unknown_command};
+        {ok, Packet} ->
+            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+            %% N.B. we can't use io_lib:fread, since it can't handle \r\n.
+            case split(binary_to_list(Packet)) of
+                {error, Reason} ->
+                    {error, Reason};
+                {Head, Tail} ->
+                    {ok, [_Key, _Flags, Bytes], []} = io_lib:fread("VALUE ~s ~u ~u", Head),
+                    {ValueList, _}  = lists:split(Bytes, Tail),
+                    Value = list_to_binary(ValueList),
+                    {ok, Value}
+            end
+    end.
+
 
 decr_command(Socket, Key, Value) ->
     Command = iolist_to_binary([<<"decr ">>, Key, " ", Value]),
@@ -493,5 +484,3 @@ split(Head, S) ->
 %% split string with "\r\n"
 split(S) ->
     split([], S).
-
-
