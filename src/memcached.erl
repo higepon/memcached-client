@@ -46,7 +46,7 @@
          add/3, add/5,
          append/3, prepend/3,
          delete/2,
-         decr/3,
+         incr/3, decr/3,
          split/1
         ]).
 
@@ -59,7 +59,7 @@
 %%====================================================================
 -define(TCP_OPTIONS, [binary, {packet, raw}, {nodelay, true}, {reuseaddr, true}, {active, false},
                       {sndbuf,16384},{recbuf,4096}]).
--define(TIMEOUT, 1000).
+-define(TIMEOUT, 5000).
 
 %%====================================================================
 %% API
@@ -184,11 +184,20 @@ delete(Conn, Key) when is_list(Key) ->
 
 
 %%--------------------------------------------------------------------
+%% Function: incr
+%% Description: incr value
+%% Returns: {ok, NewValue}
+%%--------------------------------------------------------------------
+incr(Conn, Key, Value) when is_integer(Value) ->
+    gen_server:call(Conn, {incr, Key, Value}).
+
+
+%%--------------------------------------------------------------------
 %% Function: decr
 %% Description: decr value
 %% Returns: {ok, NewValue}
 %%--------------------------------------------------------------------
-decr(Conn, Key, Value) ->
+decr(Conn, Key, Value) when is_integer(Value) ->
     gen_server:call(Conn, {decr, Key, Value}).
 
 
@@ -287,9 +296,10 @@ handle_call({prepend, Key, Value}, _From, Socket) ->
 handle_call({delete, Key}, _From, Socket) ->
     {reply, delete_command(Socket, Key), Socket};
 
-
+handle_call({incr, Key, Value}, _From, Socket) ->
+    {reply, incr_decr_command(Socket, "incr", Key, Value), Socket};
 handle_call({decr, Key, Value}, _From, Socket) ->
-    {reply, decr_command(Socket, Key, Value), Socket};
+    {reply, incr_decr_command(Socket, "decr", Key, Value), Socket};
 
 
 handle_call(disconnect, _From, Socket) ->
@@ -430,18 +440,26 @@ get_command(Socket, Key) ->
     end.
 
 
-decr_command(Socket, Key, Value) ->
-    Command = iolist_to_binary([<<"decr ">>, Key, " ", Value]),
+incr_decr_command(Socket, IncrDecr, Key, Value) ->
+    Command = iolist_to_binary([IncrDecr, " ", Key, " ", list_to_binary(integer_to_list(Value)), " "]),
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, <<"NOT_FOUND\r\n">>} ->
-            {error, not_found};
         {ok, Packet} ->
-            Parsed = io_lib:fread("~d\r\n", binary_to_list(Packet)),
-            {ok, [NewValue], _Rest} = Parsed,
-            {error, NewValue};
-        {error, Reason} ->
-            {error, Reason}
+            case split(binary_to_list(Packet)) of
+                {error, Reason} ->
+                    {error, Reason};
+                {"NOT_FOUND", []} ->
+                   {error, not_found};
+                {NewValueString, []} ->
+                    case io_lib:fread("~u", NewValueString) of
+                        {ok, [NewValue], []} ->
+                            {ok, NewValue};
+                        Other ->
+                            {error, Other}
+                    end;
+                Other ->
+                    {error, Other}
+            end
     end.
 
 

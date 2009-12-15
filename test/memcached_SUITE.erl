@@ -131,13 +131,19 @@ test_split(_Config) ->
             Tail = "\ndef\r\nxy"
     end.
 
-%% test_decr(_Config) ->
-%%     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
-%%     ok = memcached:setb(Conn, "decr_key", <<10:64/little>>),
-%%     {ok, 3} = memcached:decr(Conn, "decr_key", <<1:64/little>>),
-%%     ok = memcached:disconnect(Conn).
+test_incr(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:setb(Conn, "incr_key", list_to_binary("10")),
+    {ok, 11} = memcached:incr(Conn, "incr_key", 1),
+    {error, not_found} = memcached:incr(Conn, "incr_key2", 1),
+    ok = memcached:disconnect(Conn).
 
-%% todo decr, bad value -> 0
+test_decr(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:setb(Conn, "decr_key", list_to_binary("10")),
+    {ok, 9} = memcached:decr(Conn, "decr_key", 1),
+    {error, not_found} = memcached:decr(Conn, "decr_key2", 1),
+    ok = memcached:disconnect(Conn).
 
 %% Tests end.
 all() ->
@@ -155,6 +161,7 @@ test_connect_disconnect,
      test_add,
      test_split,
      test_append,
-     test_prepend
-%%     test_decr
+     test_prepend,
+     test_incr,
+     test_decr
 ].

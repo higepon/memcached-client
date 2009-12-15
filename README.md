@@ -19,7 +19,8 @@ Follwing functions are currently supported.
 - replace/3, replace/5
 - add/3, add/5
 - append/3, prepend/3
--delete/2
+- incr/3, decr/3
+- delete/2
 
 ### How to use
 
@@ -49,7 +50,7 @@ See more examples on [memcached_SUITE.erl](http://github.com/higepon/memcached-c
 
 ### ToDo
 
-- Commands: cas, incr, decr, stats.
+- Commands: cas, stats.
 - Mulitple servers with user defined Fun.
 - documentation
 
