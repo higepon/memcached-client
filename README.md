@@ -13,12 +13,19 @@ I know another memcached client library merle already exists, but I write this l
 Follwing functions are currently supported.
 
 - connect/2, disconnect/1
-- set/3, set/5, setb/3, setb/5
-- get/2, getb/2
-- get_multi/2, get_multib/2
-- replace/3, replace/5
-- add/3, add/5
-- append/3, prepend/3
+- functions: store/restore Erlang term
+  - set/3, set/5
+  - get/2
+  - get_multi/2
+  - replace/3, replace/5
+  - add/3, add/5
+- functions: store/replace binary
+  - setb/3, setb/5
+  - getb/2
+  - get_multib/2
+  - replaceb/3, replaceb/5
+  - addb/3, addb/5
+  - append/3, prepend/3
 - incr/3, decr/3
 - delete/2
 

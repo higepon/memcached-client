@@ -118,6 +118,14 @@ test_add(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_addb(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:addb(Conn, "myaddbkey", <<10:64/little>>),
+    {error, not_stored} = memcached:addb(Conn, "myaddbkey", <<9:64/little>>),
+    {ok, <<10:64/little>>} = memcached:getb(Conn, "myaddbkey"),
+    ok = memcached:disconnect(Conn).
+
+
 test_append(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     {error, not_stored} = memcached:append(Conn, "appendkey", "a"),
@@ -171,6 +179,7 @@ test_connect_disconnect,
      test_replace,
      test_replaceb,
      test_add,
+     test_addb,
      test_split,
      test_append,
      test_prepend,

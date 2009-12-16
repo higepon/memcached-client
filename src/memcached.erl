@@ -43,7 +43,7 @@
          get/2, getb/2,
          get_multi/2, get_multib/2,
          replace/3, replace/5, replaceb/3, replaceb/5,
-         add/3, add/5,
+         add/3, add/5, addb/3, addb/5,
          append/3, prepend/3,
          delete/2,
          incr/3, decr/3,
@@ -108,7 +108,7 @@ replace(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(E
 
 %%--------------------------------------------------------------------
 %% Function: replaceb
-%% Description: replaceb value
+%% Description: replace binary value
 %% Returns: ok, {error, not_stored} or {error, Reason}
 %%--------------------------------------------------------------------
 replaceb(Conn, Key, Value) when is_list(Key) ->
@@ -123,11 +123,20 @@ replaceb(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(
 %% Returns: ok, {error, not_stored} or {error, Reason}
 %%--------------------------------------------------------------------
 add(Conn, Key, Value) when is_list(Key) ->
-    gen_server:call(Conn, {add, Key, Value}).
-
-
+    addb(Conn, Key, term_to_binary(Value)).
 add(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
-    gen_server:call(Conn, {add, Key, Value, Flags, ExpTime}).
+    addb(Conn, Key, term_to_binary(Value), Flags, ExpTime).
+
+
+%%--------------------------------------------------------------------
+%% Function: addb
+%% Description: add binary value
+%% Returns: ok, {error, not_stored} or {error, Reason}
+%%--------------------------------------------------------------------
+addb(Conn, Key, Value) when is_list(Key) ->
+    gen_server:call(Conn, {addb, Key, Value}).
+addb(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
+    gen_server:call(Conn, {addb, Key, Value, Flags, ExpTime}).
 
 
 %%--------------------------------------------------------------------
@@ -290,10 +299,10 @@ handle_call({replaceb, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, storage_command(Socket, "replace", Key, Value, Flags, ExpTime), Socket};
 
 
-handle_call({add, Key, Value}, _From, Socket) ->
-    {reply, storage_command(Socket, "add", Key, term_to_binary(Value), 0, 0), Socket};
-handle_call({add, Key, Value, Flags, ExpTime}, _From, Socket) ->
-    {reply, storage_command(Socket, "add", Key, term_to_binary(Value), Flags, ExpTime), Socket};
+handle_call({addb, Key, Value}, _From, Socket) ->
+    {reply, storage_command(Socket, "add", Key, Value, 0, 0), Socket};
+handle_call({addb, Key, Value, Flags, ExpTime}, _From, Socket) ->
+    {reply, storage_command(Socket, "add", Key, Value, Flags, ExpTime), Socket};
 
 
 handle_call({append, Key, Value}, _From, Socket) ->
