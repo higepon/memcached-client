@@ -182,6 +182,13 @@ test_quit(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_stats(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    Stats = memcached:stats(Conn),
+    io:format("Stats=~p", [Stats]),
+    true = is_list(Stats),
+    ok = memcached:disconnect(Conn).
+
 %% Tests end.
 all() ->
     [
@@ -204,5 +211,6 @@ test_connect_disconnect,
      test_incr,
      test_decr,
      test_version,
+     test_stats,
      test_quit
 ].

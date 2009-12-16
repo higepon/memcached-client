@@ -49,6 +49,7 @@
          incr/3, decr/3,
          version/1,
          quit/1,
+         stats/1,
          split/1
         ]).
 
@@ -231,6 +232,15 @@ version(Conn) ->
 
 
 %%--------------------------------------------------------------------
+%% Function: stats
+%% Description: Returns memcached stats
+%% Returns: stats string
+%%--------------------------------------------------------------------
+stats(Conn) ->
+    gen_server:call(Conn, stats).
+
+
+%%--------------------------------------------------------------------
 %% Function: quit
 %% Description: Send quit command to server
 %% Returns: quite
@@ -358,6 +368,16 @@ handle_call(version, _From, Socket) ->
                 Other ->
                     {reply, Other, Socket}
             end;
+        {error, Reason} ->
+            {reply, {error, Reason}, Socket}
+    end;
+
+
+handle_call(stats, _From, Socket) ->
+    gen_tcp:send(Socket, <<"stats\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            {reply, binary_to_list(Packet), Socket};
         {error, Reason} ->
             {reply, {error, Reason}, Socket}
     end;
