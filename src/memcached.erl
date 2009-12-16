@@ -48,6 +48,7 @@
          delete/2,
          incr/3, decr/3,
          version/1,
+         quit/1,
          split/1
         ]).
 
@@ -230,6 +231,15 @@ version(Conn) ->
 
 
 %%--------------------------------------------------------------------
+%% Function: quit
+%% Description: Send quit command to server
+%% Returns: quite
+%%--------------------------------------------------------------------
+quit(Conn) ->
+    gen_server:call(Conn, quit).
+
+
+%%--------------------------------------------------------------------
 %% Function: disconnect
 %% Description: disconnect
 %% Returns: ok
@@ -330,8 +340,7 @@ handle_call({decr, Key, Value}, _From, Socket) ->
 
 
 handle_call(disconnect, _From, Socket) ->
-    gen_tcp:close(Socket),
-    {reply, ok, Socket};
+    {reply, gen_tcp:close(Socket), Socket};
 
 
 handle_call(version, _From, Socket) ->
@@ -351,7 +360,12 @@ handle_call(version, _From, Socket) ->
             end;
         {error, Reason} ->
             {reply, {error, Reason}, Socket}
-    end.
+    end;
+
+
+handle_call(quit, _From, Socket) ->
+    gen_tcp:send(Socket, <<"quit\r\n">>),
+    {reply, ok, Socket}.
 
 
 %%--------------------------------------------------------------------
@@ -483,7 +497,9 @@ get_command(Socket, Key) ->
                     {ValueList, _}  = lists:split(Bytes, Tail),
                     Value = list_to_binary(ValueList),
                     {ok, Value}
-            end
+            end;
+        Other ->
+            Other
     end.
 
 

@@ -175,6 +175,13 @@ test_version(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_quit(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:quit(Conn),
+    {error, closed} = memcached:get(Conn, "mykey"),
+    ok = memcached:disconnect(Conn).
+
+
 %% Tests end.
 all() ->
     [
@@ -196,5 +203,6 @@ test_connect_disconnect,
      test_prepend,
      test_incr,
      test_decr,
-     test_version
+     test_version,
+     test_quit
 ].
