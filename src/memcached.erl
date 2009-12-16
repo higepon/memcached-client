@@ -47,6 +47,7 @@
          append/3, prepend/3,
          delete/2,
          incr/3, decr/3,
+         version/1,
          split/1
         ]).
 
@@ -220,6 +221,15 @@ decr(Conn, Key, Value) when is_integer(Value) ->
 
 
 %%--------------------------------------------------------------------
+%% Function: version
+%% Description: Returns memcached server version.
+%% Returns: Version string
+%%--------------------------------------------------------------------
+version(Conn) ->
+    gen_server:call(Conn, version).
+
+
+%%--------------------------------------------------------------------
 %% Function: disconnect
 %% Description: disconnect
 %% Returns: ok
@@ -286,7 +296,6 @@ handle_call({get_multib, Keys}, _From, Socket) ->
     end;
 
 
-
 handle_call({setb, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, 0, 0), Socket};
 handle_call({setb, Key, Value, Flags, ExpTime}, _From, Socket) ->
@@ -322,7 +331,27 @@ handle_call({decr, Key, Value}, _From, Socket) ->
 
 handle_call(disconnect, _From, Socket) ->
     gen_tcp:close(Socket),
-    {reply, ok, Socket}.
+    {reply, ok, Socket};
+
+
+handle_call(version, _From, Socket) ->
+    gen_tcp:send(Socket, <<"version\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case split(binary_to_list(Packet)) of
+                {Data, []} ->
+                    case Data of
+                        [$V | [$E | [$R | [$S | [$I | [$O | [$N | [32 | Version]]]]]]]] ->
+                            {reply, Version, Socket};
+                        _ ->
+                            {reply, {error, invalid_reseponse}, Socket}
+                    end;
+                Other ->
+                    {reply, Other, Socket}
+            end;
+        {error, Reason} ->
+            {reply, {error, Reason}, Socket}
+    end.
 
 
 %%--------------------------------------------------------------------

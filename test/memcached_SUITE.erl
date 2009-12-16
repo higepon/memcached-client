@@ -143,12 +143,14 @@ test_prepend(_Config) ->
     {ok, _} = memcached:get(Conn, "prependkey"),
     ok = memcached:disconnect(Conn).
 
+
 test_split(_Config) ->
     case memcached:split("abc\r\n\ndef\r\nxy") of
     {Head, Tail} ->
             Head = "abc",
             Tail = "\ndef\r\nxy"
     end.
+
 
 test_incr(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
@@ -157,12 +159,21 @@ test_incr(_Config) ->
     {error, not_found} = memcached:incr(Conn, "incr_key2", 1),
     ok = memcached:disconnect(Conn).
 
+
 test_decr(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:setb(Conn, "decr_key", list_to_binary("10")),
     {ok, 9} = memcached:decr(Conn, "decr_key", 1),
     {error, not_found} = memcached:decr(Conn, "decr_key2", 1),
     ok = memcached:disconnect(Conn).
+
+
+test_version(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    Version = memcached:version(Conn),
+    true = is_list(Version),
+    ok = memcached:disconnect(Conn).
+
 
 %% Tests end.
 all() ->
@@ -184,5 +195,6 @@ test_connect_disconnect,
      test_append,
      test_prepend,
      test_incr,
-     test_decr
+     test_decr,
+     test_version
 ].

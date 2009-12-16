@@ -28,6 +28,7 @@ Follwing functions are currently supported.
   - append/3, prepend/3
 - incr/3, decr/3
 - delete/2
+- version/1
 
 ### How to use
 
