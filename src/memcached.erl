@@ -42,7 +42,7 @@
          set/3, set/5, setb/3, setb/5,
          get/2, getb/2,
          get_multi/2, get_multib/2,
-         replace/3, replace/5,
+         replace/3, replace/5, replaceb/3, replaceb/5,
          add/3, add/5,
          append/3, prepend/3,
          delete/2,
@@ -101,11 +101,20 @@ setb(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_binary(Value
 %% Returns: ok, {error, not_stored} or {error, Reason}
 %%--------------------------------------------------------------------
 replace(Conn, Key, Value) when is_list(Key) ->
-    gen_server:call(Conn, {replace, Key, Value}).
-
-
+    replaceb(Conn, Key, term_to_binary(Value)).
 replace(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
-    gen_server:call(Conn, {replace, Key, Value, Flags, ExpTime}).
+    replaceb(Conn, Key, term_to_binary(Value), Flags, ExpTime).
+
+
+%%--------------------------------------------------------------------
+%% Function: replaceb
+%% Description: replaceb value
+%% Returns: ok, {error, not_stored} or {error, Reason}
+%%--------------------------------------------------------------------
+replaceb(Conn, Key, Value) when is_list(Key) ->
+    gen_server:call(Conn, {replaceb, Key, Value}).
+replaceb(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_integer(ExpTime) ->
+    gen_server:call(Conn, {replaceb, Key, Value, Flags, ExpTime}).
 
 
 %%--------------------------------------------------------------------
@@ -275,10 +284,10 @@ handle_call({setb, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime), Socket};
 
 
-handle_call({replace, Key, Value}, _From, Socket) ->
-    {reply, storage_command(Socket, "replace", Key, term_to_binary(Value), 0, 0), Socket};
-handle_call({replace, Key, Value, Flags, ExpTime}, _From, Socket) ->
-    {reply, storage_command(Socket, "replace", Key, term_to_binary(Value), Flags, ExpTime), Socket};
+handle_call({replaceb, Key, Value}, _From, Socket) ->
+    {reply, storage_command(Socket, "replace", Key, Value, 0, 0), Socket};
+handle_call({replaceb, Key, Value, Flags, ExpTime}, _From, Socket) ->
+    {reply, storage_command(Socket, "replace", Key, Value, Flags, ExpTime), Socket};
 
 
 handle_call({add, Key, Value}, _From, Socket) ->

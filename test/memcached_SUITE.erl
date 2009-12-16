@@ -80,6 +80,17 @@ test_replace(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_replaceb(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:setb(Conn, "mykey", <<10:64/little>>),
+    ok = memcached:replaceb(Conn, "mykey", <<9:64/little>>),
+    {ok, <<9:64/little>>} = memcached:getb(Conn, "mykey"),
+
+    %% key not_found doesn't exist, so replaceb never happen.
+    {error, not_stored} = memcached:replaceb(Conn, "not_found", <<8:64/little>>, 0, 0),
+    ok = memcached:disconnect(Conn).
+
+
 test_get_multi(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:set(Conn, "mykey1", "myvalue1"),
@@ -158,6 +169,7 @@ test_connect_disconnect,
      test_set_expiry,
      test_delete,
      test_replace,
+     test_replaceb,
      test_add,
      test_split,
      test_append,
