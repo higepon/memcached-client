@@ -184,9 +184,10 @@ test_quit(_Config) ->
 
 test_stats(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
-    Stats = memcached:stats(Conn),
-    io:format("Stats=~p", [Stats]),
-    true = is_list(Stats),
+    case memcached:stats(Conn) of
+        {ok, [{Key, _BinaryValue} | _More]} ->
+            true = is_list(Key)
+    end,
     ok = memcached:disconnect(Conn).
 
 %% Tests end.

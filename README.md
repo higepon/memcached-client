@@ -28,6 +28,7 @@ Follwing functions are currently supported.
   - append/3, prepend/3
 - incr/3, decr/3
 - delete/2
+- stats/1
 - version/1
 - quit/1
 
@@ -59,7 +60,7 @@ See more examples on [memcached_SUITE.erl](http://github.com/higepon/memcached-c
 
 ### ToDo
 
-- Commands: cas, stats.
+- Commands: cas.
 - Mulitple servers with user defined Fun.
 - documentation
 

@@ -377,7 +377,8 @@ handle_call(stats, _From, Socket) ->
     gen_tcp:send(Socket, <<"stats\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
-            {reply, binary_to_list(Packet), Socket};
+            Stats = parse_stats(binary_to_list(Packet), []),
+            {reply, Stats, Socket};
         {error, Reason} ->
             {reply, {error, Reason}, Socket}
     end;
@@ -453,6 +454,22 @@ parse_values(Data, Values) ->
             end
     end.
 
+
+parse_stats(Data, Stats) ->
+    case Data of
+        "END\r\n" ->
+            {ok, lists:reverse(Stats)};
+        _ ->
+            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+            case split(Data) of
+                {error, Reason} ->
+                    {error, Reason};
+                {Head, Tail} ->
+                    Parsed = io_lib:fread("STAT ~s ", Head),
+                    {ok, [Key], Rest} = Parsed,
+                    parse_stats(Tail, [{Key, Rest} | Stats])
+            end
+    end.
 
 
 storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
