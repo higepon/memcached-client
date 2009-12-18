@@ -29,6 +29,7 @@ Follwing functions are currently supported.
 - incr/3, decr/3
 - delete/2
 - stats/1
+- flush_all/1, flush_all/2
 - version/1
 - quit/1
 

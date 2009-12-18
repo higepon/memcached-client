@@ -190,6 +190,14 @@ test_stats(_Config) ->
     end,
     ok = memcached:disconnect(Conn).
 
+
+test_flush_all(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:flush_all(Conn),
+    ok = memcached:flush_all(Conn, 10),
+    ok = memcached:disconnect(Conn).
+
+
 %% Tests end.
 all() ->
     [
@@ -213,5 +221,6 @@ test_connect_disconnect,
      test_decr,
      test_version,
      test_stats,
-     test_quit
+     test_quit,
+     test_flush_all
 ].

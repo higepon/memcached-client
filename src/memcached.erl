@@ -50,7 +50,8 @@
          version/1,
          quit/1,
          stats/1,
-         split/1
+         split/1,
+         flush_all/1, flush_all/2
         ]).
 
 %% gen_server callbacks
@@ -62,7 +63,7 @@
 %%====================================================================
 -define(TCP_OPTIONS, [binary, {packet, raw}, {nodelay, true}, {reuseaddr, true}, {active, false},
                       {sndbuf,16384},{recbuf,4096}]).
--define(TIMEOUT, 5000).
+-define(TIMEOUT, 10000).
 
 %%====================================================================
 %% API
@@ -237,7 +238,7 @@ version(Conn) ->
 %% Returns: stats string
 %%--------------------------------------------------------------------
 stats(Conn) ->
-    gen_server:call(Conn, stats).
+    gen_server:call(Conn, stats, 10 * 1000).
 
 
 %%--------------------------------------------------------------------
@@ -247,6 +248,17 @@ stats(Conn) ->
 %%--------------------------------------------------------------------
 quit(Conn) ->
     gen_server:call(Conn, quit).
+
+
+%%--------------------------------------------------------------------
+%% Function: flush_all
+%% Description: Send flush_all command to server
+%% Returns: quite
+%%--------------------------------------------------------------------
+flush_all(Conn) ->
+    gen_server:call(Conn, flush_all).
+flush_all(Conn, Sec) when is_integer(Sec) ->
+    gen_server:call(Conn, {flush_all, Sec}).
 
 
 %%--------------------------------------------------------------------
@@ -386,7 +398,38 @@ handle_call(stats, _From, Socket) ->
 
 handle_call(quit, _From, Socket) ->
     gen_tcp:send(Socket, <<"quit\r\n">>),
-    {reply, ok, Socket}.
+    {reply, ok, Socket};
+
+
+handle_call(flush_all, _From, Socket) ->
+    gen_tcp:send(Socket, <<"flush_all\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case Packet of
+                <<"OK\r\n">> ->
+                    {reply, ok, Socket};
+                Other ->
+                    {reply, {error, Other}, Socket}
+            end;
+        Other ->
+            {error, Other}
+    end;
+
+
+handle_call({flush_all, Sec}, _From, Socket) ->
+    Command = iolist_to_binary([<<"flush_all ">>, integer_to_list(Sec), <<"\r\n">>]),
+    gen_tcp:send(Socket, Command),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case Packet of
+                <<"OK\r\n">> ->
+                    {reply, ok, Socket};
+                Other ->
+                    {reply, {error, Other}, Socket}
+            end;
+        Other ->
+            {error, Other}
+    end.
 
 
 %%--------------------------------------------------------------------
