@@ -68,11 +68,9 @@
 %%====================================================================
 %% API
 %%====================================================================
-%%--------------------------------------------------------------------
-%% Function: connect
-%% Description: connect to a memcached
-%% Returns: {ok, Conn} or {error, Reason}.
-%%--------------------------------------------------------------------
+
+
+%% @spec connect(Host::string(), Port::integer()) -> {ok, Conn} | {error, Reason}
 connect(Host, Port) ->
     Name = random_id(),
     gen_server:start_link({local, Name}, ?MODULE, [Host, Port], []).

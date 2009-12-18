@@ -24,7 +24,7 @@ DIST_TMP_DIR=tmp
 DIST_TARGET=$(DIST_TMP_DIR)/$(TARBALL_NAME)
 PID_FILE=/tmp/memcached-erlang.pid
 
-all: $(TARGETS)
+all: $(TARGETS) doc
 
 $(EBIN_DIR)/%.beam: $(SOURCE_DIR)/%.erl
 	erlc -pa $(EBIN_DIR) $(ERLC_FLAGS) -I$(INCLUDE_DIR) -o$(EBIN_DIR) $<
@@ -46,6 +46,13 @@ dist: distclean
 	cp -r Makefile ebin src include README.md test $(DIST_TARGET)
 	tar -zcf $(TARBALL_NAME).tar.gz $(DIST_TARGET)
 	rm -rf $(DIST_TMP_DIR)
+
+.PHONY: doc
+
+doc:
+	erl -eval 'edoc:run([], ["./src/memcached.erl"], [{dir, "./doc"}, {packages, true}]).' -s init stop -noshell
+
+
 
 distclean: clean
 	rm -f *.dump
