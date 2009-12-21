@@ -535,6 +535,9 @@ parse_stats(Data, Stats) ->
             end
     end.
 
+storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
+    EmptyCas64 = <<>>,
+    storage_command(Socket, Command, Key, Value, Flags, ExpTime, EmptyCas64).
 storage_command(Socket, Command, Key, Value, Flags, ExpTime, Cas64) when is_integer(Flags) andalso is_integer(ExpTime) ->
     ValueAsBinary = Value,
     Bytes = integer_to_list(size(ValueAsBinary)),
@@ -560,33 +563,6 @@ storage_command(Socket, Command, Key, Value, Flags, ExpTime, Cas64) when is_inte
         {error, Reason} ->
             {error, Reason}
     end.
-
-storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
-    ValueAsBinary = Value,
-    Bytes = integer_to_list(size(ValueAsBinary)),
-    CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes]),
-    gen_tcp:send(Socket, <<CommandAsBinary/binary, "\r\n">>),
-    gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, Packet} ->
-            case string:tokens(binary_to_list(Packet), "\r\n") of
-                ["STORED"] ->
-                    ok;
-                ["NOT_STORED"] ->
-                    {error, not_stored};
-                ["ERROR"] ->
-                    {error, unknown_command};
-                %% memcached returns this for append command.
-                ["ERROR", "ERROR"] ->
-                    {error, unknown_command};
-                Other ->
-                    io:format("Other=~p~n", [Other]),
-                    {error, Other}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
-
 
 
 %% memcached 1.4.0 or higher doesn't support time argument.
