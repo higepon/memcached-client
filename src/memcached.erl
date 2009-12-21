@@ -40,6 +40,7 @@
 %% API
 -export([connect/2, disconnect/1,
          set/3, set/5, setb/3, setb/5,
+         cas/6, casb/6,
          get/2, getb/2,
          get_multi/2, get_multib/2,
          replace/3, replace/5, replaceb/3, replaceb/5,
@@ -95,6 +96,24 @@ setb(Conn, Key, Value) when is_list(Key) andalso is_binary(Value) ->
     gen_server:call(Conn, {setb, Key, Value}).
 setb(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_binary(Value) andalso is_integer(Flags) andalso is_integer(ExpTime) ->
     gen_server:call(Conn, {setb, Key, Value, Flags, ExpTime}).
+
+
+%%--------------------------------------------------------------------
+%% Function: cas
+%% Description: set cas
+%% Returns: ok
+%%--------------------------------------------------------------------
+cas(Conn, Key, Value, Flags, ExpTime, Cas64) when is_integer(Cas64) ->
+    casb(Conn, Key, term_to_binary(Value), Flags, ExpTime, Cas64).
+
+
+%%--------------------------------------------------------------------
+%% Function: casb
+%% Description: set cas
+%% Returns: ok
+%%--------------------------------------------------------------------
+casb(Conn, Key, Value, Flags, ExpTime, Cas64) when is_integer(Cas64) andalso is_binary(Value) ->
+    gen_server:call(Conn, {casb, Key, Value, Flags, ExpTime, list_to_binary(integer_to_list(Cas64))}).
 
 
 %%--------------------------------------------------------------------
@@ -332,6 +351,10 @@ handle_call({setb, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime), Socket};
 
 
+handle_call({casb, Key, Value, Flags, ExpTime, Cas64}, _From, Socket) ->
+    {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime, Cas64), Socket};
+
+
 handle_call({replaceb, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "replace", Key, Value, 0, 0), Socket};
 handle_call({replaceb, Key, Value, Flags, ExpTime}, _From, Socket) ->
@@ -512,6 +535,31 @@ parse_stats(Data, Stats) ->
             end
     end.
 
+storage_command(Socket, Command, Key, Value, Flags, ExpTime, Cas64) when is_integer(Flags) andalso is_integer(ExpTime) ->
+    ValueAsBinary = Value,
+    Bytes = integer_to_list(size(ValueAsBinary)),
+    CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes, <<" ">>, Cas64]),
+    gen_tcp:send(Socket, <<CommandAsBinary/binary, "\r\n">>),
+    gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case string:tokens(binary_to_list(Packet), "\r\n") of
+                ["STORED"] ->
+                    ok;
+                ["NOT_STORED"] ->
+                    {error, not_stored};
+                ["ERROR"] ->
+                    {error, unknown_command};
+                %% memcached returns this for append command.
+                ["ERROR", "ERROR"] ->
+                    {error, unknown_command};
+                Other ->
+                    io:format("Other=~p~n", [Other]),
+                    {error, Other}
+            end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
     ValueAsBinary = Value,

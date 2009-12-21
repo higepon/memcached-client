@@ -19,6 +19,7 @@ Follwing functions are currently supported.
   - get_multi/2
   - replace/3, replace/5
   - add/3, add/5
+  - cas/6
 - functions: store/replace binary
   - setb/3, setb/5
   - getb/2
@@ -26,6 +27,7 @@ Follwing functions are currently supported.
   - replaceb/3, replaceb/5
   - addb/3, addb/5
   - append/3, prepend/3
+  - casb/6
 - incr/3, decr/3
 - delete/2
 - stats/1

@@ -197,6 +197,12 @@ test_flush_all(_Config) ->
     ok = memcached:flush_all(Conn, 10),
     ok = memcached:disconnect(Conn).
 
+test_cas(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    Cas64 = 1234,
+    ok = memcached:cas(Conn, "casKey", "casValue", 0, 0, Cas64),
+    ok = memcached:disconnect(Conn).
+
 
 %% Tests end.
 all() ->
@@ -222,5 +228,6 @@ test_connect_disconnect,
      test_version,
      test_stats,
      test_quit,
-     test_flush_all
+     test_flush_all,
+     test_cas
 ].
