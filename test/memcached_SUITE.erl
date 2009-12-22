@@ -197,6 +197,7 @@ test_flush_all(_Config) ->
     ok = memcached:flush_all(Conn, 10),
     ok = memcached:disconnect(Conn).
 
+
 test_cas(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     Cas64 = 1234,
@@ -204,30 +205,42 @@ test_cas(_Config) ->
     ok = memcached:disconnect(Conn).
 
 
+test_gets(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:set(Conn, "higeKey", "higeValue"),
+    {ok, "higeValue", CasUnique64} = memcached:gets(Conn, "higeKey"),
+    ok = memcached:cas(Conn, "higeKey", "higeNewValue", 0, 0, CasUnique64),
+    {ok, "higeNewValue", CasUnique642} = memcached:gets(Conn, "higeKey"),
+    true = CasUnique64 =/= CasUnique642,
+    ok = memcached:disconnect(Conn).
+
+%% gets_mutlti
+
 %% Tests end.
 all() ->
     [
-test_connect_disconnect,
-     test_connect_error,
-     test_set_get,
-     test_setb_getb,
-     test_get_not_exist,
-     test_get_multi,
-     test_get_multib,
-     test_set_expiry,
-     test_delete,
-     test_replace,
-     test_replaceb,
-     test_add,
-     test_addb,
-     test_split,
-     test_append,
-     test_prepend,
-     test_incr,
-     test_decr,
-     test_version,
-     test_stats,
-     test_quit,
-     test_flush_all,
-     test_cas
+%% test_connect_disconnect,
+%%      test_connect_error,
+%%      test_set_get,
+%%      test_setb_getb,
+%%      test_get_not_exist,
+%%      test_get_multi,
+%%      test_get_multib,
+%%      test_set_expiry,
+%%      test_delete,
+%%      test_replace,
+%%      test_replaceb,
+%%      test_add,
+%%      test_addb,
+%%      test_split,
+%%      test_append,
+%%      test_prepend,
+%%      test_incr,
+%%      test_decr,
+%%      test_version,
+%%      test_stats,
+%%      test_quit,
+%%      test_flush_all,
+%%      test_cas,
+     test_gets
 ].

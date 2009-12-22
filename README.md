@@ -15,14 +15,14 @@ Follwing functions are currently supported.
 - connect/2, disconnect/1
 - functions: store/restore Erlang term
   - set/3, set/5
-  - get/2
+  - get/2, gets/2
   - get_multi/2
   - replace/3, replace/5
   - add/3, add/5
   - cas/6
 - functions: store/replace binary
   - setb/3, setb/5
-  - getb/2
+  - getb/2, getsb/2
   - get_multib/2
   - replaceb/3, replaceb/5
   - addb/3, addb/5

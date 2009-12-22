@@ -41,7 +41,7 @@
 -export([connect/2, disconnect/1,
          set/3, set/5, setb/3, setb/5,
          cas/6, casb/6,
-         get/2, getb/2,
+         get/2, getb/2, gets/2, getsb/2,
          get_multi/2, get_multib/2,
          replace/3, replace/5, replaceb/3, replaceb/5,
          add/3, add/5, addb/3, addb/5,
@@ -103,8 +103,8 @@ setb(Conn, Key, Value, Flags, ExpTime) when is_list(Key) andalso is_binary(Value
 %% Description: set cas
 %% Returns: ok
 %%--------------------------------------------------------------------
-cas(Conn, Key, Value, Flags, ExpTime, Cas64) when is_integer(Cas64) ->
-    casb(Conn, Key, term_to_binary(Value), Flags, ExpTime, Cas64).
+cas(Conn, Key, Value, Flags, ExpTime, CasUnique64) ->
+    casb(Conn, Key, term_to_binary(Value), Flags, ExpTime, CasUnique64).
 
 
 %%--------------------------------------------------------------------
@@ -112,8 +112,8 @@ cas(Conn, Key, Value, Flags, ExpTime, Cas64) when is_integer(Cas64) ->
 %% Description: set cas
 %% Returns: ok
 %%--------------------------------------------------------------------
-casb(Conn, Key, Value, Flags, ExpTime, Cas64) when is_integer(Cas64) andalso is_binary(Value) ->
-    gen_server:call(Conn, {casb, Key, Value, Flags, ExpTime, list_to_binary(integer_to_list(Cas64))}).
+casb(Conn, Key, Value, Flags, ExpTime, CasUnique64) when is_binary(Value) ->
+    gen_server:call(Conn, {casb, Key, Value, Flags, ExpTime, CasUnique64}).
 
 
 %%--------------------------------------------------------------------
@@ -188,12 +188,30 @@ get(Conn, Key) when is_list(Key) ->
 
 
 %%--------------------------------------------------------------------
+%% Function: gets
+%% Description: get value and cas
+%% Returns: {ok, Value, CasUnique64}, {error, not_found} or {error, Reason}
+%%--------------------------------------------------------------------
+gets(Conn, Key) when is_list(Key) ->
+    gen_server:call(Conn, {gets, Key}).
+
+
+%%--------------------------------------------------------------------
 %% Function: getb
 %% Description: get value as binary
 %% Returns: {ok, Value}, {error, not_found} or {error, Reason}
 %%--------------------------------------------------------------------
 getb(Conn, Key) when is_list(Key) ->
     gen_server:call(Conn, {getb, Key}).
+
+
+%%--------------------------------------------------------------------
+%% Function: getsb
+%% Description: get value as binary and cas
+%% Returns: {ok, Value, CasUnique64}, {error, not_found} or {error, Reason}
+%%--------------------------------------------------------------------
+getsb(Conn, Key) when is_list(Key) ->
+    gen_server:call(Conn, {getsb, Key}).
 
 
 %%--------------------------------------------------------------------
@@ -301,15 +319,32 @@ connect(Hosts, Ports, Fun) ->
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
 handle_call({get, Key}, _From, Socket) ->
-    case get_command(Socket, Key) of
-        {ok, BinaryValue} ->
+    case get_command(Socket, "get", Key) of
+        {ok, BinaryValue, _CasUnique64} ->
             Value = binary_to_term(BinaryValue),
             {reply, {ok, Value}, Socket};
         Other ->
             {reply, Other, Socket}
     end;
+handle_call({gets, Key}, _From, Socket) ->
+    case get_command(Socket, "gets", Key) of
+        {ok, BinaryValue, CasUnique64} ->
+            {reply, {ok, binary_to_term(BinaryValue), CasUnique64}, Socket};
+        Other ->
+            {reply, Other, Socket}
+    end;
+
+
 handle_call({getb, Key}, _From, Socket) ->
-    {reply, get_command(Socket, Key), Socket};
+    case get_command(Socket, "get", Key) of
+        {ok, BinaryValue, _CasUnique64} ->
+            {reply, {ok, BinaryValue}, Socket};
+        Other ->
+            {reply, Other, Socket}
+    end;
+
+handle_call({getsb, Key}, _From, Socket) ->
+    {reply, get_command(Socket, "gets", Key), Socket};
 
 
 handle_call({get_multi, Keys}, _From, Socket) ->
@@ -351,8 +386,8 @@ handle_call({setb, Key, Value, Flags, ExpTime}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime), Socket};
 
 
-handle_call({casb, Key, Value, Flags, ExpTime, Cas64}, _From, Socket) ->
-    {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime, Cas64), Socket};
+handle_call({casb, Key, Value, Flags, ExpTime, CasUnique64}, _From, Socket) ->
+    {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime, CasUnique64), Socket};
 
 
 handle_call({replaceb, Key, Value}, _From, Socket) ->
@@ -494,6 +529,34 @@ terminate(_Reason, Socket) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+parse_value(Data) ->
+    %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+    %% N.B. we can't use io_lib:fread, since it can't handle \r\n.
+    io:format("Data=~p", [Data]),
+    case split(Data) of
+        {error, Reason} ->
+            {error, Reason};
+        {Head, Tail} ->
+            case io_lib:fread("VALUE ~s ~u ~u ~u", Head) of
+                {ok, Parsed, []} ->
+                    [_Key, _Flags, Bytes, CasUnique64] = Parsed,
+                    {ValueList, _}  = lists:split(Bytes, Tail),
+                    Value = list_to_binary(ValueList),
+                    {ok, Value, CasUnique64};
+                Other ->
+                    case io_lib:fread("VALUE ~s ~u ~u", Head) of
+                        {ok, Parsed, []} ->
+                            [_Key, _Flags, Bytes] = Parsed,
+                            {ValueList, _}  = lists:split(Bytes, Tail),
+                            Value = list_to_binary(ValueList),
+                            {ok, Value, []};
+                        Other ->
+                            {error, Other}
+                    end
+            end
+    end.
+
 parse_values(Data, Values) ->
     case Data of
         "END\r\n" ->
@@ -536,12 +599,12 @@ parse_stats(Data, Stats) ->
     end.
 
 storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
-    EmptyCas64 = <<>>,
-    storage_command(Socket, Command, Key, Value, Flags, ExpTime, EmptyCas64).
-storage_command(Socket, Command, Key, Value, Flags, ExpTime, Cas64) when is_integer(Flags) andalso is_integer(ExpTime) ->
+    EmptyCasUnique64 = <<>>,
+    storage_command(Socket, Command, Key, Value, Flags, ExpTime, EmptyCasUnique64).
+storage_command(Socket, Command, Key, Value, Flags, ExpTime, CasUnique64) when is_integer(Flags) andalso is_integer(ExpTime) ->
     ValueAsBinary = Value,
     Bytes = integer_to_list(size(ValueAsBinary)),
-    CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes, <<" ">>, Cas64]),
+    CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes, <<" ">>, CasUnique64]),
     gen_tcp:send(Socket, <<CommandAsBinary/binary, "\r\n">>),
     gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
@@ -580,8 +643,8 @@ delete_command(Socket, Key) ->
             {error, Reason}
     end.
 
-get_command(Socket, Key) ->
-    Command = iolist_to_binary([<<"get ">>, Key]),
+get_command(Socket, GetCommand, Key) ->
+    Command = iolist_to_binary([GetCommand, <<" ">>, Key]),
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, <<"END\r\n">>} ->
@@ -589,17 +652,7 @@ get_command(Socket, Key) ->
         {ok, <<"ERROR\r\n">>} ->
             {error, unknown_command};
         {ok, Packet} ->
-            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
-            %% N.B. we can't use io_lib:fread, since it can't handle \r\n.
-            case split(binary_to_list(Packet)) of
-                {error, Reason} ->
-                    {error, Reason};
-                {Head, Tail} ->
-                    {ok, [_Key, _Flags, Bytes], []} = io_lib:fread("VALUE ~s ~u ~u", Head),
-                    {ValueList, _}  = lists:split(Bytes, Tail),
-                    Value = list_to_binary(ValueList),
-                    {ok, Value}
-            end;
+           parse_value(binary_to_list(Packet));
         Other ->
             Other
     end.
