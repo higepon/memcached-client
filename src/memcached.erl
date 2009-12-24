@@ -66,6 +66,8 @@
 -define(TCP_OPTIONS, [binary, {packet, raw}, {nodelay, true}, {reuseaddr, true}, {active, false},
                       {sndbuf,16384},{recbuf,4096}]).
 -define(TIMEOUT, 10000).
+-define(CR, 13).
+-define(LF, 10).
 
 %%====================================================================
 %% API
@@ -613,7 +615,7 @@ parse_values(Data, Values) ->
                     Value = list_to_binary(ValueList),
                     case Rest of
                         [] -> {ok, lists:reverse([{Key, Value, CasUnique64} | Values])};
-                        [13 | [10 | R]] ->
+                        [?CR| [?LF | R]] ->
                             parse_values(R, [{Key, Value, CasUnique64} | Values])
                     end;
                 Other ->
@@ -735,8 +737,7 @@ string_join(Join, [H|Q], Conv) ->
 
 split(Head, S) ->
     case S of
-        %% "\r\n"
-        [13 | [10 | More]] ->
+        [?CR | [?LF | More]] ->
             {lists:reverse(Head), More};
         [] ->
             {error, not_found};
