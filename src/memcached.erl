@@ -329,6 +329,16 @@ disconnect(Conn) ->
 %%     ok.
 
 
+init([Host, Port]) ->
+    case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
+        {ok, Socket} -> {ok, Socket};
+        {error, Reason} ->
+            {stop, Reason};
+        Other ->
+            {stop, Other}
+    end.
+
+
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
 %%                                      {reply, Reply, State, Timeout} |
@@ -722,15 +732,6 @@ string_join(Join, [H|Q], Conv) ->
         [Conv(H)|lists:map(fun(E) -> [Join, Conv(E)] end, Q)]
     )).
 
-
-init([Host, Port]) ->
-    case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
-        {ok, Socket} -> {ok, Socket};
-        {error, Reason} ->
-            {stop, Reason};
-        Other ->
-            {stop, Other}
-    end.
 
 split(Head, S) ->
     case S of
