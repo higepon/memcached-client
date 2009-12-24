@@ -374,7 +374,7 @@ handle_call({get_multi, Keys}, _From, Socket) ->
         {ok, Packet} ->
             case parse_values(binary_to_list(Packet)) of
                 {ok, BinValues} ->
-                    Values = lists:map(fun({Key, Value}) -> {Key, binary_to_term(Value)} end, BinValues),
+                    Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, binary_to_term(Value)} end, BinValues),
                     {reply, {ok, Values}, Socket};
                 Other ->
                     {reply, Other, Socket}
@@ -390,7 +390,8 @@ handle_call({get_multib, Keys}, _From, Socket) ->
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
             case parse_values(binary_to_list(Packet)) of
-                {ok, Values} ->
+                {ok, BinValues} ->
+                    Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, Value} end, BinValues),
                     {reply, {ok, Values}, Socket};
                 Other ->
                     {reply, Other, Socket}
@@ -594,6 +595,19 @@ parse_value(Data) ->
             end
     end.
 
+parse_single_value(Data) ->
+    case io_lib:fread("VALUE ~s ~u ~u", Data) of
+        {ok, [Key, _Flags, Bytes], []} ->
+            {Key, Bytes, []};
+        _ ->
+            case io_lib:fread("VALUE ~s ~u ~u ~u", Data) of
+                {ok, [Key, _Flags, Bytes, CasUnique64], []} ->
+                    {Key, Bytes, CasUnique64};
+                _ ->
+                    {error, "invalid VALUE response " ++ Data}
+            end
+    end.
+
 parse_values(Data) ->
     parse_values(Data, []).
 parse_values(Data, Values) ->
@@ -606,26 +620,17 @@ parse_values(Data, Values) ->
         {"ERROR", []} ->
             {error, unknown_command};
         {Head, Tail} ->
-            case io_lib:fread("VALUE ~s ~u ~u", Head) of
-                {ok, [Key, _Flags, Bytes], []} ->
+            case parse_single_value(Head) of
+                {Key, Bytes, CasUnique64} ->
                     {ValueList, Rest}  = lists:split(Bytes, Tail),
                     Value = list_to_binary(ValueList),
                     case Rest of
-                        [] -> {ok, lists:reverse([{Key, Value} | Values])};
+                        [] -> {ok, lists:reverse([{Key, Value, CasUnique64} | Values])};
                         [13 | [10 | R]] ->
-                            parse_values(R, [{Key, Value} | Values])
+                            parse_values(R, [{Key, Value, CasUnique64} | Values])
                     end;
-                _ ->
-                    case io_lib:fread("VALUE ~s ~u ~u ~u", Head) of
-                        {ok, [Key, _Flags, Bytes, CasUnique64], []} ->
-                            {ValueList, Rest}  = lists:split(Bytes, Tail),
-                            Value = list_to_binary(ValueList),
-                            case Rest of
-                                [] -> {ok, lists:reverse([{Key, Value, CasUnique64} | Values])};
-                                [13 | [10 | R]] ->
-                                    parse_values(R, [{Key, Value, CasUnique64} | Values])
-                            end
-                    end
+                Other ->
+                    Other
             end
     end.
 
