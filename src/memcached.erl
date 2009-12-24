@@ -43,6 +43,7 @@
          cas/6, casb/6,
          get/2, getb/2, gets/2, getsb/2,
          get_multi/2, get_multib/2,
+         gets_multi/2, gets_multib/2,
          replace/3, replace/5, replaceb/3, replaceb/5,
          add/3, add/5, addb/3, addb/5,
          append/3, prepend/3,
@@ -231,6 +232,25 @@ get_multi(Conn, Keys) when is_list(Keys) ->
 get_multib(Conn, Keys) when is_list(Keys) ->
     gen_server:call(Conn, {get_multib, Keys}).
 
+
+%%--------------------------------------------------------------------
+%% Function: gets_multi
+%% Description: get multiple values with cas value
+%% Returns: {ok, Values}, Values = list of {Key, Value, CasValue}.
+%%--------------------------------------------------------------------
+gets_multi(Conn, Keys) when is_list(Keys) ->
+    gen_server:call(Conn, {gets_multi, Keys}).
+
+
+%%--------------------------------------------------------------------
+%% Function: gets_multib
+%% Description: get multiple binary values with cas value
+%% Returns: {ok, Values}, Values = list of {Key, Value}.
+%%--------------------------------------------------------------------
+gets_multib(Conn, Keys) when is_list(Keys) ->
+    gen_server:call(Conn, {gets_multib, Keys}).
+
+
 %%--------------------------------------------------------------------
 %% Function: delete
 %% Description: delete value
@@ -378,6 +398,24 @@ handle_call({get_multib, Keys}, _From, Socket) ->
         {error, Reason} ->
             {reply, {error, Reason}, Socket}
     end;
+
+
+handle_call({gets_multi, Keys}, _From, Socket) ->
+    Command = iolist_to_binary([<<"gets ">>, string_join(" ", Keys)]),
+    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
+    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+        {ok, Packet} ->
+            case parse_values2(binary_to_list(Packet), []) of
+                {ok, BinValues} ->
+                    Values = lists:map(fun({Key, Value, CasValue}) -> {Key, binary_to_term(Value), CasValue} end, BinValues),
+                    {reply, {ok, Values}, Socket};
+                Other ->
+                    {reply, Other, Socket}
+            end;
+        {error, Reason} ->
+            {reply, {error, Reason}, Socket}
+    end;
+
 
 
 handle_call({setb, Key, Value}, _From, Socket) ->
@@ -533,7 +571,6 @@ terminate(_Reason, Socket) ->
 parse_value(Data) ->
     %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
     %% N.B. we can't use io_lib:fread, since it can't handle \r\n.
-    io:format("Data=~p", [Data]),
     case split(Data) of
         {error, Reason} ->
             {error, Reason};
@@ -557,7 +594,7 @@ parse_value(Data) ->
             end
     end.
 
-parse_values(Data, Values) ->
+parse_values2(Data, Values) ->
     case Data of
         "END\r\n" ->
             {ok, lists:reverse(Values)};
@@ -565,6 +602,31 @@ parse_values(Data, Values) ->
             {error, unknown_command};
         _ ->
             %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+            case split(Data) of
+                {error, Reason} ->
+                    {error, Reason};
+                {Head, Tail} ->
+                    Parsed = io_lib:fread("VALUE ~s ~u ~u ~u", Head),
+                    {ok, [Key, _Flags, Bytes, CasUnique64], []} = Parsed,
+                    {ValueList, Rest}  = lists:split(Bytes, Tail),
+                    Value = list_to_binary(ValueList),
+                    case Rest of
+                        [] -> {ok, lists:reverse([{Key, Value, CasUnique64} | Values])};
+                        [13 | [10 | R]] ->
+                            parse_values2(R, [{Key, Value, CasUnique64} | Values])
+                    end
+            end
+    end.
+
+
+parse_values(Data, Values) ->
+    case Data of
+        "END\r\n" ->
+            {ok, lists:reverse(Values)};
+        "ERROR\r\n" ->
+            {error, unknown_command};
+        _ ->
+            %% Format: VALUE <key> <flags> <bytes> <cas unique>\r\n
             case split(Data) of
                 {error, Reason} ->
                     {error, Reason};
