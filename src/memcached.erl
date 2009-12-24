@@ -324,9 +324,9 @@ flush_all(Conn, Sec) when is_integer(Sec) ->
 disconnect(Conn) ->
     gen_server:call(Conn, disconnect).
 
-connect(Hosts, Ports, Fun) ->
-    %% todo
-    ok.
+%% connect(Hosts, Ports, Fun) ->
+%%     %% todo
+%%     ok.
 
 
 %%--------------------------------------------------------------------

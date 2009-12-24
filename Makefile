@@ -43,8 +43,8 @@ install: all
 
 dist: distclean
 	mkdir -p $(DIST_TARGET)
-	cp -r Makefile ebin src include README.md test $(DIST_TARGET)
-	tar -zcf $(TARBALL_NAME).tar.gz $(DIST_TARGET)
+	cp -r Makefile ebin src log README.md test $(DIST_TARGET)
+	(cd $(DIST_TMP_DIR) &&	  tar -zcf ../$(TARBALL_NAME).tar.gz $(TARBALL_NAME))
 	rm -rf $(DIST_TMP_DIR)
 
 .PHONY: doc
