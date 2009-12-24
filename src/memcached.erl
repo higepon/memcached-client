@@ -339,82 +339,75 @@ connect(Hosts, Ports, Fun) ->
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
 handle_call({get, Key}, _From, Socket) ->
-    case get_command(Socket, "get", Key) of
-        {ok, BinaryValue, _CasUnique64} ->
-            Value = binary_to_term(BinaryValue),
-            {reply, {ok, Value}, Socket};
+    case get_command(Socket, "get", [Key]) of
+        {ok, []} ->
+            {reply, {error, not_found}, Socket};
+        {ok, [{_Key, Value, _CasUnique64}]} ->
+            {reply, {ok, binary_to_term(Value)}, Socket};
         Other ->
             {reply, Other, Socket}
     end;
+
+
 handle_call({gets, Key}, _From, Socket) ->
-    case get_command(Socket, "gets", Key) of
-        {ok, BinaryValue, CasUnique64} ->
-            {reply, {ok, binary_to_term(BinaryValue), CasUnique64}, Socket};
+    case get_command(Socket, "gets", [Key]) of
+        {ok, []} ->
+            {reply, {error, not_found}, Socket};
+        {ok, [{_Key, Value, CasUnique64}]} ->
+            {reply, {ok, binary_to_term(Value), CasUnique64}, Socket};
         Other ->
             {reply, Other, Socket}
     end;
 
 
 handle_call({getb, Key}, _From, Socket) ->
-    case get_command(Socket, "get", Key) of
-        {ok, BinaryValue, _CasUnique64} ->
-            {reply, {ok, BinaryValue}, Socket};
+    case get_command(Socket, "get", [Key]) of
+        {ok, []} ->
+            {reply, {error, not_found}, Socket};
+        {ok, [{_Key, Value, _CasUnique64}]} ->
+            {reply, {ok, Value}, Socket};
         Other ->
             {reply, Other, Socket}
     end;
 
 handle_call({getsb, Key}, _From, Socket) ->
-    {reply, get_command(Socket, "gets", Key), Socket};
+    case get_command(Socket, "gets", [Key]) of
+        {ok, []} ->
+            {reply, {error, not_found}, Socket};
+        {ok, [{_Key, Value, CasUnique64}]} ->
+            {reply, {ok, Value, CasUnique64}, Socket};
+        Other ->
+            {reply, Other, Socket}
+    end;
 
 
 handle_call({get_multi, Keys}, _From, Socket) ->
-    Command = iolist_to_binary([<<"get ">>, string_join(" ", Keys)]),
-    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, Packet} ->
-            case parse_values(binary_to_list(Packet)) of
-                {ok, BinValues} ->
-                    Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, binary_to_term(Value)} end, BinValues),
-                    {reply, {ok, Values}, Socket};
-                Other ->
-                    {reply, Other, Socket}
-            end;
-        {error, Reason} ->
-            {reply, {error, Reason}, Socket}
+    case get_command(Socket, "get", Keys) of
+        {ok, BinaryValues} ->
+            Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, binary_to_term(Value)} end, BinaryValues),
+            {reply, {ok, Values}, Socket};
+        Other ->
+            {reply, Other, Socket}
     end;
 
 
 handle_call({get_multib, Keys}, _From, Socket) ->
-    Command = iolist_to_binary([<<"get ">>, string_join(" ", Keys)]),
-    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, Packet} ->
-            case parse_values(binary_to_list(Packet)) of
-                {ok, BinValues} ->
-                    Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, Value} end, BinValues),
-                    {reply, {ok, Values}, Socket};
-                Other ->
-                    {reply, Other, Socket}
-            end;
-        {error, Reason} ->
-            {reply, {error, Reason}, Socket}
+    case get_command(Socket, "get", Keys) of
+        {ok, BinaryValues} ->
+            Values = lists:map(fun({Key, BinaryValue, _CasUnique64}) -> {Key, BinaryValue} end, BinaryValues),
+            {reply, {ok, Values}, Socket};
+        Other ->
+            {reply, Other, Socket}
     end;
 
 
 handle_call({gets_multi, Keys}, _From, Socket) ->
-    Command = iolist_to_binary([<<"gets ">>, string_join(" ", Keys)]),
-    gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, Packet} ->
-            case parse_values(binary_to_list(Packet)) of
-                {ok, BinValues} ->
-                    Values = lists:map(fun({Key, Value, CasValue}) -> {Key, binary_to_term(Value), CasValue} end, BinValues),
-                    {reply, {ok, Values}, Socket};
-                Other ->
-                    {reply, Other, Socket}
-            end;
-        {error, Reason} ->
-            {reply, {error, Reason}, Socket}
+    case get_command(Socket, "gets", Keys) of
+        {ok, BinaryValues} ->
+            Values = lists:map(fun({Key, Value, CasUnique64}) -> {Key, binary_to_term(Value), CasUnique64} end, BinaryValues),
+            {reply, {ok, Values}, Socket};
+        Other ->
+            {reply, Other, Socket}
     end;
 
 
@@ -671,19 +664,17 @@ delete_command(Socket, Key) ->
             {error, Reason}
     end.
 
-get_command(Socket, GetCommand, Key) ->
-    Command = iolist_to_binary([GetCommand, <<" ">>, Key]),
+get_command(Socket, GetCommand, Keys) ->
+    Command = iolist_to_binary([GetCommand, <<" ">>, string_join(" ", Keys)]),
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
-           case parse_values(binary_to_list(Packet)) of
-               {ok, []} ->
-                   {error, not_found};
-               {ok, [{_Key, Value, CasUnique64}]} ->
-                   {ok, Value, CasUnique64};
-               Other ->
-                   Other
-           end;
+            case parse_values(binary_to_list(Packet)) of
+                {ok, BinValues} ->
+                    {ok, BinValues};
+                Other ->
+                    Other
+            end;
         Other ->
             Other
     end.
