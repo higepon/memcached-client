@@ -69,4 +69,4 @@ If you would like to contribute, first check out the source.
 Then modify the markdown files with your improvements, commit them and either send me a patch, or push the changes into a fork of the repo and send me a pull request.
 
 ### Contributors
-- volutas: http://twitter.com/voluntas
+- [volutas](http://twitter.com/voluntas)
