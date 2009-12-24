@@ -1,6 +1,6 @@
 TARGETS = $(BEAMS)
 
-APP_NAME=memcached
+APP_NAME=memcached-client
 VERSION=0.0.1
 
 SOURCE_DIR=src
