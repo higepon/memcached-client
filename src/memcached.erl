@@ -576,23 +576,16 @@ parse_value(Data) ->
         {error, Reason} ->
             {error, Reason};
         {Head, Tail} ->
-            case io_lib:fread("VALUE ~s ~u ~u ~u", Head) of
-                {ok, Parsed, []} ->
-                    [_Key, _Flags, Bytes, CasUnique64] = Parsed,
+            case parse_single_value(Head) of
+                {_Key, Bytes, CasUnique64} ->
                     {ValueList, _}  = lists:split(Bytes, Tail),
                     Value = list_to_binary(ValueList),
                     {ok, Value, CasUnique64};
                 Other ->
-                    case io_lib:fread("VALUE ~s ~u ~u", Head) of
-                        {ok, Parsed, []} ->
-                            [_Key, _Flags, Bytes] = Parsed,
-                            {ValueList, _}  = lists:split(Bytes, Tail),
-                            Value = list_to_binary(ValueList),
-                            {ok, Value, []};
-                        Other ->
-                            {error, Other}
-                    end
-            end
+                    Other
+            end;
+        Other ->
+            Other
     end.
 
 parse_single_value(Data) ->
@@ -603,8 +596,8 @@ parse_single_value(Data) ->
             case io_lib:fread("VALUE ~s ~u ~u ~u", Data) of
                 {ok, [Key, _Flags, Bytes, CasUnique64], []} ->
                     {Key, Bytes, CasUnique64};
-                _ ->
-                    {error, "invalid VALUE response " ++ Data}
+                Other ->
+                    {error, Other}
             end
     end.
 
