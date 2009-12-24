@@ -569,25 +569,6 @@ terminate(_Reason, Socket) ->
 %% Internal functions
 %%====================================================================
 
-parse_value(Data) ->
-    %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
-    %% N.B. we can't use io_lib:fread, since it can't handle \r\n.
-    case split(Data) of
-        {error, Reason} ->
-            {error, Reason};
-        {Head, Tail} ->
-            case parse_single_value(Head) of
-                {_Key, Bytes, CasUnique64} ->
-                    {ValueList, _}  = lists:split(Bytes, Tail),
-                    Value = list_to_binary(ValueList),
-                    {ok, Value, CasUnique64};
-                Other ->
-                    Other
-            end;
-        Other ->
-            Other
-    end.
-
 parse_single_value(Data) ->
     case io_lib:fread("VALUE ~s ~u ~u", Data) of
         {ok, [Key, _Flags, Bytes], []} ->
@@ -600,6 +581,7 @@ parse_single_value(Data) ->
                     {error, Other}
             end
     end.
+
 
 parse_values(Data) ->
     parse_values(Data, []).
@@ -693,12 +675,15 @@ get_command(Socket, GetCommand, Key) ->
     Command = iolist_to_binary([GetCommand, <<" ">>, Key]),
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, <<"END\r\n">>} ->
-            {error, not_found};
-        {ok, <<"ERROR\r\n">>} ->
-            {error, unknown_command};
         {ok, Packet} ->
-           parse_value(binary_to_list(Packet));
+           case parse_values(binary_to_list(Packet)) of
+               {ok, []} ->
+                   {error, not_found};
+               {ok, [{_Key, Value, CasUnique64}]} ->
+                   {ok, Value, CasUnique64};
+               Other ->
+                   Other
+           end;
         Other ->
             Other
     end.
