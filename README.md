@@ -1,6 +1,6 @@
 ### What is this?
 A memcached client library for Erlang.
-I know another memcached client library merle already exists, but I write this library for a concurrent use.
+All memcached commannds (including cas) are supported.
 
 ### Building and Installing 
 
@@ -10,20 +10,18 @@ I know another memcached client library merle already exists, but I write this l
   4. make install
 
 ### Functions
-Follwing functions are currently supported.
-
 - connect/2, disconnect/1
 - functions: store/restore Erlang term
   - set/3, set/5
   - get/2, gets/2
-  - get_multi/2
+  - get_multi/2, gets_multi/2
   - replace/3, replace/5
   - add/3, add/5
   - cas/6
-- functions: store/replace binary
+- functions: store/replace binary data
   - setb/3, setb/5
   - getb/2, getsb/2
-  - get_multib/2
+  - get_multib/2, gets_multib/2
   - replaceb/3, replaceb/5
   - addb/3, addb/5
   - append/3, prepend/3
@@ -62,8 +60,6 @@ Follwing functions are currently supported.
 See more examples on [memcached_SUITE.erl](http://github.com/higepon/memcached-client/blob/master/test/memcached_SUITE.erl).
 
 ### ToDo
-
-- Commands: cas.
 - Mulitple servers with user defined Fun.
 - documentation
 
