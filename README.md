@@ -5,9 +5,10 @@ All memcached commannds (including cas) are supported.
 ### Building and Installing 
 
   1. Install a recent version of Erlang.
-  2. make
-  3. make check (memcached required)
-  4. make install
+  2. Download [memcached-client-0.0.1.tar.gz](http://cloud.github.com/downloads/higepon/memcached-client/memcached-client-0.0.1.tar.gz).
+  3. make
+  4. make check (memcached required)
+  5. make install
 
 ### Functions
 - connect/2, disconnect/1
