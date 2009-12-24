@@ -214,6 +214,7 @@ test_gets(_Config) ->
     true = CasUnique64 =/= CasUnique642,
     ok = memcached:disconnect(Conn).
 
+
 test_gets_multi(_Config) ->
     {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
     ok = memcached:set(Conn, "hageKey1", "hageValue1"),
@@ -230,7 +231,20 @@ test_gets_multi(_Config) ->
      ok = memcached:disconnect(Conn).
 
 
-%% gets_mutlti
+test_gets_multib(_Config) ->
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    ok = memcached:setb(Conn, "hageKey1", <<"hageValue1">>),
+    ok = memcached:setb(Conn, "hageKey2", <<"hageValue2">>),
+    {ok, [{"hageKey1", <<"hageValue1">>, CasUnique1},
+          {"hageKey2", <<"hageValue2">>, CasUnique2}]}
+        = memcached:gets_multib(Conn, ["hageKey1", "hageKey2"]),
+    ok = memcached:casb(Conn, "hageKey1", <<"hageNewValue1">>, 0, 0, CasUnique1),
+    ok = memcached:casb(Conn, "hageKey2", <<"hageNewValue2">>, 0, 0, CasUnique2),
+    {ok, [{"hageKey1", <<"hageNewValue1">>, NewCasUnique1},
+          {"hageKey2", <<"hageNewValue2">>, NewCasUnique2}]} = memcached:gets_multib(Conn, ["hageKey1", "hageKey2"]),
+    true = CasUnique1 =/= NewCasUnique1,
+    true = CasUnique1 =/= NewCasUnique2,
+     ok = memcached:disconnect(Conn).
 
 %% Tests end.
 all() ->
@@ -259,5 +273,6 @@ all() ->
      test_flush_all,
      test_cas,
      test_gets,
-     test_gets_multi
+     test_gets_multi,
+     test_gets_multib
 ].

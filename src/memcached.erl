@@ -411,6 +411,15 @@ handle_call({gets_multi, Keys}, _From, Socket) ->
     end;
 
 
+handle_call({gets_multib, Keys}, _From, Socket) ->
+    case get_command(Socket, "gets", Keys) of
+        {ok, BinaryValues} ->
+            Values = lists:map(fun({Key, Value, CasUnique64}) -> {Key, Value, CasUnique64} end, BinaryValues),
+            {reply, {ok, Values}, Socket};
+        Other ->
+            {reply, Other, Socket}
+    end;
+
 
 handle_call({setb, Key, Value}, _From, Socket) ->
     {reply, storage_command(Socket, "set", Key, Value, 0, 0), Socket};
@@ -669,12 +678,7 @@ get_command(Socket, GetCommand, Keys) ->
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
-            case parse_values(binary_to_list(Packet)) of
-                {ok, BinValues} ->
-                    {ok, BinValues};
-                Other ->
-                    Other
-            end;
+            parse_values(binary_to_list(Packet));
         Other ->
             Other
     end.
