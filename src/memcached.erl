@@ -372,7 +372,7 @@ handle_call({get_multi, Keys}, _From, Socket) ->
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
-            case parse_values2(binary_to_list(Packet), []) of
+            case parse_values(binary_to_list(Packet)) of
                 {ok, BinValues} ->
                     Values = lists:map(fun({Key, Value}) -> {Key, binary_to_term(Value)} end, BinValues),
                     {reply, {ok, Values}, Socket};
@@ -389,7 +389,7 @@ handle_call({get_multib, Keys}, _From, Socket) ->
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
-            case parse_values2(binary_to_list(Packet), []) of
+            case parse_values(binary_to_list(Packet)) of
                 {ok, Values} ->
                     {reply, {ok, Values}, Socket};
                 Other ->
@@ -405,7 +405,7 @@ handle_call({gets_multi, Keys}, _From, Socket) ->
     gen_tcp:send(Socket, <<Command/binary, "\r\n">>),
     case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
         {ok, Packet} ->
-            case parse_values2(binary_to_list(Packet), []) of
+            case parse_values(binary_to_list(Packet)) of
                 {ok, BinValues} ->
                     Values = lists:map(fun({Key, Value, CasValue}) -> {Key, binary_to_term(Value), CasValue} end, BinValues),
                     {reply, {ok, Values}, Socket};
@@ -594,39 +594,36 @@ parse_value(Data) ->
             end
     end.
 
-parse_values2(Data, Values) ->
-    case Data of
-        "END\r\n" ->
+parse_values(Data) ->
+    parse_values(Data, []).
+parse_values(Data, Values) ->
+    %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+    case split(Data) of
+        {error, Reason} ->
+            {error, Reason};
+        {"END", []} ->
             {ok, lists:reverse(Values)};
-        "ERROR\r\n" ->
+        {"ERROR", []} ->
             {error, unknown_command};
-        _ ->
-            %% Format: VALUE <key> <flags> <bytes> [<cas unique>]\r\n
-            case split(Data) of
-                {error, Reason} ->
-                    {error, Reason};
-                {Head, Tail} ->
+        {Head, Tail} ->
+            case io_lib:fread("VALUE ~s ~u ~u", Head) of
+                {ok, [Key, _Flags, Bytes], []} ->
+                    {ValueList, Rest}  = lists:split(Bytes, Tail),
+                    Value = list_to_binary(ValueList),
+                    case Rest of
+                        [] -> {ok, lists:reverse([{Key, Value} | Values])};
+                        [13 | [10 | R]] ->
+                            parse_values(R, [{Key, Value} | Values])
+                    end;
+                _ ->
                     case io_lib:fread("VALUE ~s ~u ~u ~u", Head) of
-                        {ok, Parsed, []} ->
-                            [Key, _Flags, Bytes, CasUnique64] = Parsed,
+                        {ok, [Key, _Flags, Bytes, CasUnique64], []} ->
                             {ValueList, Rest}  = lists:split(Bytes, Tail),
                             Value = list_to_binary(ValueList),
                             case Rest of
                                 [] -> {ok, lists:reverse([{Key, Value, CasUnique64} | Values])};
                                 [13 | [10 | R]] ->
-                                    parse_values2(R, [{Key, Value, CasUnique64} | Values])
-                            end;
-                        _ ->
-                            case io_lib:fread("VALUE ~s ~u ~u", Head) of
-                                {ok, Parsed, []} ->
-                                    [Key, _Flags, Bytes] = Parsed,
-                                    {ValueList, Rest}  = lists:split(Bytes, Tail),
-                                    Value = list_to_binary(ValueList),
-                                    case Rest of
-                                        [] -> {ok, lists:reverse([{Key, Value} | Values])};
-                                        [13 | [10 | R]] ->
-                                            parse_values2(R, [{Key, Value} | Values])
-                                    end
+                                    parse_values(R, [{Key, Value, CasUnique64} | Values])
                             end
                     end
             end
