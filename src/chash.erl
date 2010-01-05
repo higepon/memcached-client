@@ -8,39 +8,79 @@
 -module(chash).
 
 %% API
--export([create/0, add_node/3, remove_node/2, get_node/2]).
+-export([new/1, delete/1, add_node/3, remove_node/2, get_node/2]).
+
+
+%%====================================================================
+%% Definitions
+%%====================================================================
+-define(NUMBER_OF_REPLICAS, 100).
 
 %%====================================================================
 %% API
 %%====================================================================
 %%--------------------------------------------------------------------
-%% Function: create
+%% Function: new
 %% Description:
 %%--------------------------------------------------------------------
-create() ->
-    ok.
+new(Name) ->
+    ets:new(Name, [ordered_set, protected]).
 
 %%--------------------------------------------------------------------
 %% Function: add_node
 %% Description:
 %%--------------------------------------------------------------------
 add_node(CHash, NodeKey, Node) ->
-    ok.
+    add_node(0, CHash, NodeKey, Node).
+
+add_node(N, _CHash, _NodeKey, _Node) when N =:= ?NUMBER_OF_REPLICAS ->
+    ok;
+add_node(N, CHash, NodeKey, Node) ->
+    Hash = hash([N | NodeKey]),
+    true = ets:insert(CHash, {Hash, Node}),
+    add_node(N + 1, CHash, NodeKey, Node).
 
 %%--------------------------------------------------------------------
 %% Function: remove_node
 %% Description:
 %%--------------------------------------------------------------------
 remove_node(CHash, NodeKey) ->
-    ok.
+    remove_node(0, CHash, NodeKey).
+
+remove_node(N, _CHash, _NodeKey) when N =:= ?NUMBER_OF_REPLICAS ->
+    ok;
+remove_node(N, CHash, NodeKey) ->
+    Hash = hash([N | NodeKey]),
+    true = ets:delete(CHash, Hash),
+    remove_node(N + 1, CHash, NodeKey).
 
 %%--------------------------------------------------------------------
 %% Function: get_node
 %% Description:
 %%--------------------------------------------------------------------
 get_node(CHash, Key) ->
-    ok.
+    Hash = hash(Key),
+    case ets:lookup(CHash, Hash) of
+        [Value] -> Value;
+        [] ->
+            case ets:next(CHash, Key) of
+                '$end_of_table' ->
+                    ets:first(CHash);
+                NextKey ->
+                    ets:lookup(CHash, NextKey)
+            end
+    end.
+
+%%--------------------------------------------------------------------
+%% Function: delete
+%% Description:
+%%--------------------------------------------------------------------
+delete(CHash) ->
+    ets:delete(CHash).
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+hash(Key) ->
+    <<Int1 : 32/unsigned-little-integer,  Int2 : 32/unsigned-little-integer, Int3 : 32/unsigned-little-integer, Int4 : 32/unsigned-little-integer>> = erlang:md5(Key),
+    [Int1, Int2, Int3, Int4].

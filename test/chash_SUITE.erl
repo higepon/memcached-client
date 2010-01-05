@@ -16,7 +16,7 @@ suite() ->
 
 %% Tests start.
 test_simple(_Config) ->
-    CHash = chash:create(),
+    CHash = chash:new(chash1),
     ok = chash:add_node(CHash, "127.0.0.1:8000", server_a),
     ok = chash:add_node(CHash, "127.0.0.1:8001", server_b),
     ok = chash:add_node(CHash, "127.0.0.1:8002", server_c),
