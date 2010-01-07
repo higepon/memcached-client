@@ -24,13 +24,13 @@ test_simple(_Config) ->
     io:format("Server=~p", [Server]),
     true = lists:any(fun(E) -> E =:= Server end, [server_a, server_b, server_c]),
 
-    ok = chash:remove_node(CHash, "127.0.0.1:8001"),
+    ok = chash:remove_node(CHash, "127.0.0.1:8000"),
     Server2 = chash:get_node(CHash, "Hello"),
-    true = lists:any(fun(E) -> E =:= Server2 end, [server_a, server_c]),
+    true = lists:any(fun(E) -> E =:= Server2 end, [server_b, server_c]),
 
     ok = chash:remove_node(CHash, "127.0.0.1:8002"),
-    Server2 = chash:get_node(CHash, "Hello"),
-    true = lists:any(fun(E) -> E =:= Server2 end, [server_a]),
+    Server3 = chash:get_node(CHash, "Hello"),
+    true = lists:any(fun(E) -> E =:= Server3 end, [server_b]),
     true = chash:delete(CHash),
     ok.
 
@@ -46,8 +46,30 @@ test_practical(_Config) ->
     NumberOfA = length(lists:filter(fun(Server) -> Server =:= server_a end, Servers)),
     NumberOfB = length(lists:filter(fun(Server) -> Server =:= server_b end, Servers)),
     NumberOfC = length(lists:filter(fun(Server) -> Server =:= server_c end, Servers)),
-    io:format("~p ~p ~p ~p~n", [NumberOfA, NumberOfB, NumberOfC, Servers]),
     true = (3000 =< NumberOfA andalso NumberOfA =< 3600),
+    true = (3000 =< NumberOfB andalso NumberOfB =< 3600),
+    true = (3000 =< NumberOfC andalso NumberOfC =< 3600),
+
+    %% remove node
+    ok = chash:remove_node(CHash, "127.0.0.1:8001"),
+    Servers2 = lists:map(fun(Key) -> chash:get_node(CHash, Key) end, Keys),
+    NumberOfA2 = length(lists:filter(fun(Server) -> Server =:= server_a end, Servers2)),
+    NumberOfB2 = length(lists:filter(fun(Server) -> Server =:= server_b end, Servers2)),
+    NumberOfC2 = length(lists:filter(fun(Server) -> Server =:= server_c end, Servers2)),
+    true = (4000 =< NumberOfA2 andalso NumberOfA2 =< 6000),
+    true = (4000 =< NumberOfC2 andalso NumberOfC2 =< 6000),
+    true = NumberOfB2 =:= 0,
+
+    %% remove node
+    ok = chash:remove_node(CHash, "127.0.0.1:8000"),
+    Servers3 = lists:map(fun(Key) -> chash:get_node(CHash, Key) end, Keys),
+    NumberOfA3 = length(lists:filter(fun(Server) -> Server =:= server_a end, Servers3)),
+    NumberOfB3 = length(lists:filter(fun(Server) -> Server =:= server_b end, Servers3)),
+    NumberOfC3 = length(lists:filter(fun(Server) -> Server =:= server_c end, Servers3)),
+    true = NumberOfA3 =:= 0,
+    true = NumberOfB3 =:= 0,
+    true = NumberOfC3 =:= 10000,
+
     ok.
 
 %% Tests end.

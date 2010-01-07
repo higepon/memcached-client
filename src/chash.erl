@@ -60,11 +60,9 @@ remove_node(N, CHash, NodeKey) ->
 %%--------------------------------------------------------------------
 get_node(CHash, Key) ->
     Hash = hash(Key),
-    io:format("hage=~p~n", [Hash]),
-
     case ets_lookup(CHash, Hash) of
         [] ->
-            case ets:next(CHash, Key) of
+            case ets:next(CHash, Hash) of
                 '$end_of_table' ->
                     case ets:first(CHash) of
                         '$end_of_table' ->
@@ -73,7 +71,6 @@ get_node(CHash, Key) ->
                             ets_lookup(CHash, FirstKey)
                     end;
                 NextKey ->
-                    io:format("hige=~p", [NextKey]),
                     ets_lookup(CHash, NextKey)
             end;
         Value ->
@@ -91,8 +88,7 @@ delete(CHash) ->
 %% Internal functions
 %%====================================================================
 hash(Key) ->
-    <<Int1 : 32/unsigned-little-integer,  Int2 : 32/unsigned-little-integer, Int3 : 32/unsigned-little-integer, Int4 : 32/unsigned-little-integer>> = erlang:md5(Key),
-    [Int1, Int2, Int3, Int4].
+    erlang:md5(Key).
 
 ets_lookup(CHash, Key) ->
     case ets:lookup(CHash, Key) of
