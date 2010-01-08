@@ -22,7 +22,8 @@ ERLC_FLAGS=+warn_unused_vars \
 TARBALL_NAME=$(APP_NAME)-$(VERSION)
 DIST_TMP_DIR=tmp
 DIST_TARGET=$(DIST_TMP_DIR)/$(TARBALL_NAME)
-PID_FILE=/tmp/memcached-erlang.pid
+PID_FILE1=/tmp/memcached-erlang1.pid
+PID_FILE2=/tmp/memcached-erlang2.pid
 
 all: $(TARGETS) doc
 
@@ -31,9 +32,11 @@ $(EBIN_DIR)/%.beam: $(SOURCE_DIR)/%.erl
 
 check: all
 	pgrep -lf memcached |grep 11411 || false
-	@memcached -d -p 11411 -P ${PID_FILE} #-vvv
+	@memcached -d -p 11411 -P ${PID_FILE1} #-vvv
+	@memcached -d -p 11511 -P ${PID_FILE2} #-vvv
 	@erl -pa `pwd`/ebin -eval 'io:format("~p", [ct:run_test([{auto_compile, true}, {dir, "./test"}, {logdir, "./log"}, {refresh_logs, "./log"}, {cover, "./src/coverspec"}])]).' -s init stop
-	@kill `cat ${PID_FILE}`
+	@kill `cat ${PID_FILE1}`
+	@kill `cat ${PID_FILE2}`
 
 test: check
 

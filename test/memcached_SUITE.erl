@@ -10,7 +10,8 @@
 -compile(export_all).
 
 -include("ct.hrl").
--define(MEMCACHED_PORT, 11411).
+-define(MEMCACHED_PORT1, 11411).
+-define(MEMCACHED_PORT2, 11511).
 -define(MEMCACHED_HOST, "127.0.0.1").
 
 suite() ->
@@ -21,24 +22,24 @@ suite() ->
 
 %% Tests start.
 test_connect_disconnect(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:disconnect(Conn).
 
 
 test_connect_error(_Config) ->
     process_flag(trap_exit,true),
-    {error, _} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT + 1).
+    {error, _} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1 + 1).
 
 
 test_set_get(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:set(Conn, "mykey", "myvalue"),
     {ok, "myvalue"} = memcached:get(Conn, "mykey"),
     ok = memcached:disconnect(Conn).
 
 
 test_setb_getb(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:setb(Conn, "bin_key", <<10:64/little>>),
     io:format("aval=~p~n", [<<10:64/little>>]),
     {ok,  <<10:64/little>>} = memcached:getb(Conn, "bin_key"),
@@ -46,13 +47,13 @@ test_setb_getb(_Config) ->
 
 
 test_get_not_exist(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     {error, not_found} = memcached:get(Conn, "not-exist"),
     ok = memcached:disconnect(Conn).
 
 
 test_set_expiry(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:set(Conn, "mykey", "myvalue", 0, 1),
     receive after 1000 -> [] end,
     {error, not_found} = memcached:get(Conn, "mykey"),
@@ -60,7 +61,7 @@ test_set_expiry(_Config) ->
 
 
 test_delete(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:set(Conn, "mykey", "myvalue"),
     {ok, "myvalue"} = memcached:get(Conn, "mykey"),
     ok = memcached:delete(Conn, "mykey"),
@@ -70,7 +71,7 @@ test_delete(_Config) ->
 
 
 test_replace(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:set(Conn, "mykey", "myvalue"),
     ok = memcached:replace(Conn, "mykey", "mynewvalue"),
     {ok, "mynewvalue"} = memcached:get(Conn, "mykey"),
@@ -81,7 +82,7 @@ test_replace(_Config) ->
 
 
 test_replaceb(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:setb(Conn, "mykey", <<10:64/little>>),
     ok = memcached:replaceb(Conn, "mykey", <<9:64/little>>),
     {ok, <<9:64/little>>} = memcached:getb(Conn, "mykey"),
@@ -92,7 +93,7 @@ test_replaceb(_Config) ->
 
 
 test_get_multi(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:set(Conn, "mykey1", "myvalue1"),
     ok = memcached:set(Conn, "mykey3", "myvalue3"),
     {ok, [{"mykey1", "myvalue1"},
@@ -102,7 +103,7 @@ test_get_multi(_Config) ->
 
 
 test_get_multib(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:setb(Conn, "mykey1b", <<10:64/little>>),
     ok = memcached:setb(Conn, "mykey3b", <<13:64/little>>),
     {ok, [{"mykey1b", <<10:64/little>>},
@@ -112,14 +113,14 @@ test_get_multib(_Config) ->
 
 
 test_add(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:add(Conn, "myaddkey", "myvalue1"),
     {error, not_stored} = memcached:add(Conn, "myaddkey", "newvalue"),
     ok = memcached:disconnect(Conn).
 
 
 test_addb(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:addb(Conn, "myaddbkey", <<10:64/little>>),
     {error, not_stored} = memcached:addb(Conn, "myaddbkey", <<9:64/little>>),
     {ok, <<10:64/little>>} = memcached:getb(Conn, "myaddbkey"),
@@ -127,7 +128,7 @@ test_addb(_Config) ->
 
 
 test_append(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     {error, not_stored} = memcached:append(Conn, "appendkey", "a"),
     ok = memcached:set(Conn, "appendkey", "a"),
     ok = memcached:append(Conn, "appendkey", "a"),
@@ -136,7 +137,7 @@ test_append(_Config) ->
 
 
 test_prepend(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     {error, not_stored} = memcached:prepend(Conn, "prependkey", "a"),
     ok = memcached:set(Conn, "prependkey", "a"),
     ok = memcached:prepend(Conn, "prependkey", "a"),
@@ -153,7 +154,7 @@ test_split(_Config) ->
 
 
 test_incr(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:setb(Conn, "incr_key", list_to_binary("10")),
     {ok, 11} = memcached:incr(Conn, "incr_key", 1),
     {error, not_found} = memcached:incr(Conn, "incr_key2", 1),
@@ -161,7 +162,7 @@ test_incr(_Config) ->
 
 
 test_decr(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:setb(Conn, "decr_key", list_to_binary("10")),
     {ok, 9} = memcached:decr(Conn, "decr_key", 1),
     {error, not_found} = memcached:decr(Conn, "decr_key2", 1),
@@ -169,21 +170,21 @@ test_decr(_Config) ->
 
 
 test_version(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     Version = memcached:version(Conn),
     true = is_list(Version),
     ok = memcached:disconnect(Conn).
 
 
 test_quit(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:quit(Conn),
     {error, closed} = memcached:get(Conn, "mykey"),
     ok = memcached:disconnect(Conn).
 
 
 test_stats(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     case memcached:stats(Conn) of
         {ok, [{Key, _BinaryValue} | _More]} ->
             true = is_list(Key)
@@ -192,21 +193,21 @@ test_stats(_Config) ->
 
 
 test_flush_all(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:flush_all(Conn),
     ok = memcached:flush_all(Conn, 10),
     ok = memcached:disconnect(Conn).
 
 
 test_cas(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     Cas64 = <<1>>,
     ok = memcached:cas(Conn, "casKey", "casValue", 0, 0, Cas64),
     ok = memcached:disconnect(Conn).
 
 
 test_gets(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:set(Conn, "higeKey", "higeValue"),
     {ok, "higeValue", CasUnique64} = memcached:gets(Conn, "higeKey"),
     ok = memcached:cas(Conn, "higeKey", "higeNewValue", 0, 0, CasUnique64),
@@ -216,7 +217,7 @@ test_gets(_Config) ->
 
 
 test_gets_multi(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:set(Conn, "hageKey1", "hageValue1"),
     ok = memcached:set(Conn, "hageKey2", "hageValue2"),
     {ok, [{"hageKey1", "hageValue1", CasUnique1},
@@ -232,7 +233,7 @@ test_gets_multi(_Config) ->
 
 
 test_gets_multib(_Config) ->
-    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT),
+    {ok, Conn} = memcached:connect(?MEMCACHED_HOST, ?MEMCACHED_PORT1),
     ok = memcached:setb(Conn, "hageKey1", <<"hageValue1">>),
     ok = memcached:setb(Conn, "hageKey2", <<"hageValue2">>),
     {ok, [{"hageKey1", <<"hageValue1">>, CasUnique1},
@@ -244,7 +245,21 @@ test_gets_multib(_Config) ->
           {"hageKey2", <<"hageNewValue2">>, NewCasUnique2}]} = memcached:gets_multib(Conn, ["hageKey1", "hageKey2"]),
     true = CasUnique1 =/= NewCasUnique1,
     true = CasUnique1 =/= NewCasUnique2,
-     ok = memcached:disconnect(Conn).
+    ok = memcached:disconnect(Conn).
+
+
+test_multiple_server(_Config) ->
+    {ok, Conn} = memcached:connect([{?MEMCACHED_HOST, ?MEMCACHED_PORT1},
+                                    {?MEMCACHED_HOST, ?MEMCACHED_PORT2}]),
+    ok = memcached:set(Conn, "1", "1"),
+    ok = memcached:set(Conn, "2", "2"),
+    ok = memcached:set(Conn, "3", "3"),
+    ok = memcached:set(Conn, "4", "4"),
+    {ok, "1"} = memcached:get(Conn, "1"),
+    {ok, "2"} = memcached:get(Conn, "2"),
+    {ok, "3"} = memcached:get(Conn, "3"),
+    {ok, "4"} = memcached:get(Conn, "4"),
+    ok = memcached:disconnect(Conn).
 
 %% Tests end.
 all() ->
@@ -274,5 +289,6 @@ all() ->
      test_cas,
      test_gets,
      test_gets_multi,
-     test_gets_multib
+     test_gets_multib,
+     test_multiple_server
 ].
