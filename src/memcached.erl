@@ -328,7 +328,9 @@ flush_all(Conn, Sec) when is_integer(Sec) ->
 %% Returns: ok
 %%--------------------------------------------------------------------
 disconnect(Conn) ->
-    gen_server:call(Conn, disconnect).
+    gen_server:call(Conn, disconnect),
+    ok.
+
 
 init([Host, Port]) ->
     case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
@@ -470,7 +472,7 @@ handle_call({decr, Key, Value}, _From, {Connections, CHash, Socket}) ->
 
 
 handle_call(disconnect, _From, {Connections, CHash, Socket}) ->
-    {reply, gen_tcp:close(Socket), {Connections, CHash, Socket}};
+    {stop, normal, ok, {Connections, CHash, Socket}};
 
 
 handle_call(version, _From, {Connections, CHash, Socket}) ->
@@ -574,8 +576,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% cleaning up. When it returns, the gen_server terminates with Reason.
 %% The return value is ignored.
 %%--------------------------------------------------------------------
-terminate(_Reason, {_Connections, Socket}) ->
-    io:format("terminate ~p~n", [self()]),
+terminate(_Reason, {_Connections, _CHash, Socket}) ->
     gen_tcp:close(Socket).
 
 %%====================================================================
