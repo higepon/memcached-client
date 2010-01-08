@@ -76,13 +76,11 @@
 
 %% @spec connect(Host::string(), Port::integer()) -> {ok, Conn} | {error, Reason}
 connect(Host, Port) ->
-    Name = random_id(),
-    gen_server:start_link({local, Name}, ?MODULE, [Host, Port], []).
+    gen_server:start_link(?MODULE, [Host, Port], []).
 
 connect(HostPortSpecs) ->
-    Name = random_id(),
     [{Host, Port} | _More] = HostPortSpecs,
-    gen_server:start_link({local, Name}, ?MODULE, [Host, Port], []).
+    gen_server:start_link(?MODULE, [Host, Port], []).
 
 %%--------------------------------------------------------------------
 %% Function: set
@@ -718,10 +716,6 @@ incr_decr_command(Socket, IncrDecr, Key, Value) ->
             end
     end.
 
-
-random_id() ->
-    crypto:start(),
-    list_to_atom("memcached_client" ++ integer_to_list(crypto:rand_uniform(1, 65536 * 65536))).
 
 %% Borrowed from http://www.trapexit.org/String_join_with
 string_join(Join, L) ->
