@@ -332,7 +332,12 @@ disconnect(Conn) ->
 
 init([Host, Port]) ->
     case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
-        {ok, Socket} -> {ok, {dict:new(), chash:new(memcached), Socket}};
+        {ok, Socket} ->
+            Server = Host ++ integer_to_list(Port),
+            CHash = chash:new(memcached),
+            ok = chash:add_node(CHash, Server, Server),
+            Connections = dict:store(Server, Socket, dict:new()),
+            {ok, {Connections, CHash, Socket}};
         {error, Reason} ->
             {stop, Reason};
         Other ->
@@ -349,14 +354,19 @@ init([Host, Port]) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
-handle_call({get, Key}, _From, {Connections, CHash, Socket}) ->
-    case get_command(Socket, "get", [Key]) of
-        {ok, []} ->
-            {reply, {error, not_found}, {Connections, CHash, Socket}};
-        {ok, [{_Key, Value, _CasUnique64}]} ->
-            {reply, {ok, binary_to_term(Value)}, {Connections, CHash, Socket}};
-        Other ->
-            {reply, Other, {Connections, CHash, Socket}}
+handle_call({get, Key}, _From, {Connections, CHash, _Socket}) ->
+    case get_socket(Key, Connections, CHash) of
+        {ok, Socket, NewConnections} ->
+            case get_command(Socket, "get", [Key]) of
+                {ok, []} ->
+                    {reply, {error, not_found}, {NewConnections, CHash, Socket}};
+                {ok, [{_Key, Value, _CasUnique64}]} ->
+                    {reply, {ok, binary_to_term(Value)}, {NewConnections, CHash, Socket}};
+                Other ->
+                    {reply, Other, {NewConnections, CHash, Socket}}
+            end;
+        {error, Reason} ->
+            {reply, {error, Reason}, {Connections, CHash, _Socket}}
     end;
 
 
@@ -714,6 +724,17 @@ incr_decr_command(Socket, IncrDecr, Key, Value) ->
                 Other ->
                     {error, Other}
             end
+    end.
+
+
+get_socket(Key, Connections, CHash) ->
+    Server = chash:get_node(CHash, Key),
+    case dict:find(Server, Connections) of
+        {ok, {_Host, _Port}} ->
+            %%% ok, newdict
+            {reply, {error, temphoge}};
+        {ok, Socket} ->
+            {ok, Socket, Connections}
     end.
 
 
