@@ -336,7 +336,7 @@ init([Host, Port]) ->
             Server = Host ++ integer_to_list(Port),
             CHash = chash:new(memcached),
             ok = chash:add_node(CHash, Server, Server),
-            Connections = dict:store(Server, Socket, dict:new()),
+            Connections = dict:store(Server, {Host, Port}, dict:new()),
             {ok, {Connections, CHash, Socket}};
         {error, Reason} ->
             {stop, Reason};
@@ -514,9 +514,16 @@ handle_call(stats, _From, {Connections, CHash, Socket}) ->
     end;
 
 
-handle_call(quit, _From, {Connections, CHash, Socket}) ->
-    gen_tcp:send(Socket, <<"quit\r\n">>),
-    {reply, ok, {Connections, CHash, Socket}};
+handle_call(quit, _From, {Connections, CHash, _Socket}) ->
+    lists:foreach(fun(Socket) -> gen_tcp:senc(Socket, <<"quit\r\n">>) end, all_sockets(Connections)),
+    {reply, ok, {Connections, CHash, _Socket}};
+%%     case get_socket(Key, Connections, CHash) of
+%%         {ok, Socket, NewConnections} ->
+%%             gen_tcp:send(Socket, <<"quit\r\n">>),
+%%             {reply, ok, {NewConnections, CHash, Socket}};
+%%         {error, Reason} ->
+%%             {reply, {error, Reason}, {NewConnections, CHash, Socket}}
+%%     end;
 
 
 handle_call(flush_all, _From, {Connections, CHash, Socket}) ->
@@ -584,8 +591,8 @@ code_change(_OldVsn, State, _Extra) ->
 %% cleaning up. When it returns, the gen_server terminates with Reason.
 %% The return value is ignored.
 %%--------------------------------------------------------------------
-terminate(_Reason, {_Connections, _CHash, Socket}) ->
-    gen_tcp:close(Socket).
+terminate(_Reason, {Connections, _CHash, _Socket}) ->
+    lists:foreach(fun(Socket) -> gen_tcp:close(Socket) end,  all_sockets(Connections)).
 
 %%====================================================================
 %% Internal functions
@@ -730,13 +737,41 @@ incr_decr_command(Socket, IncrDecr, Key, Value) ->
 get_socket(Key, Connections, CHash) ->
     Server = chash:get_node(CHash, Key),
     case dict:find(Server, Connections) of
-        {ok, {_Host, _Port}} ->
-            %%% ok, newdict
-            {reply, {error, temphoge}};
+        {ok, {Host, Port}} ->
+            case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
+                {ok, Socket} ->
+                    Server = Host ++ integer_to_list(Port),
+                    NewConnections = dict:store(Server, Socket, Connections),
+                    {ok, Socket, NewConnections};
+                {error, Reason} ->
+                    {error, Reason};
+                Other ->
+                    {error, Other}
+            end;
         {ok, Socket} ->
             {ok, Socket, Connections}
     end.
 
+all_sockets(Connections) ->
+    filter_map(fun(X) ->
+                     case X of
+                         {_Host, _Port} ->
+                             false;
+                         Socket -> Socket
+                     end
+             end,
+             dict:to_list(Connections)).
+
+
+filter_map(_Fun, []) ->
+    [];
+filter_map(Fun, [Elem | Rest]) ->
+    case apply(Fun, [Elem]) of
+        false ->
+            filter_map(Fun, Rest);
+        X ->
+            [X | filter_map(Fun, Rest)]
+    end.
 
 %% Borrowed from http://www.trapexit.org/String_join_with
 string_join(Join, L) ->
