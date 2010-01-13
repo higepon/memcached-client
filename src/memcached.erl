@@ -344,6 +344,13 @@ init([Host, Port]) ->
             {stop, Other}
     end.
 
+call_with_socket(Fun, Key, Connections, CHash, _Socket) ->
+    case get_socket(Key, Connections, CHash) of
+        {ok, Socket, NewConnections} ->
+            apply(Fun, [Socket, NewConnections]);
+        {error, Reason} ->
+            {reply, {error, Reason}, {Connections, CHash, _Socket}}
+    end.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -355,61 +362,78 @@ init([Host, Port]) ->
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
 handle_call({get, Key}, _From, {Connections, CHash, _Socket}) ->
-    case get_socket(Key, Connections, CHash) of
-        {ok, Socket, NewConnections} ->
-            case get_command(Socket, "get", [Key]) of
-                {ok, []} ->
-                    {reply, {error, not_found}, {NewConnections, CHash, Socket}};
-                {ok, [{_Key, Value, _CasUnique64}]} ->
-                    {reply, {ok, binary_to_term(Value)}, {NewConnections, CHash, Socket}};
-                Other ->
-                    {reply, Other, {NewConnections, CHash, Socket}}
-            end;
-        {error, Reason} ->
-            {reply, {error, Reason}, {Connections, CHash, _Socket}}
-    end;
+    call_with_socket(
+      fun(Socket, NewConnections) ->
+              case get_command(Socket, "get", [Key]) of
+                  {ok, []} ->
+                      {reply, {error, not_found}, {NewConnections, CHash, Socket}};
+                  {ok, [{_Key, Value, _CasUnique64}]} ->
+                      {reply, {ok, binary_to_term(Value)}, {NewConnections, CHash, Socket}};
+                  Other ->
+                      {reply, Other, {NewConnections, CHash, Socket}}
+              end
+      end,
+      Key, Connections, CHash, _Socket);
 
 
-handle_call({gets, Key}, _From, {Connections, CHash, Socket}) ->
-    case get_command(Socket, "gets", [Key]) of
-        {ok, []} ->
-            {reply, {error, not_found}, {Connections, CHash, Socket}};
-        {ok, [{_Key, Value, CasUnique64}]} ->
-            {reply, {ok, binary_to_term(Value), CasUnique64}, {Connections, CHash, Socket}};
-        Other ->
-            {reply, Other, {Connections, CHash, Socket}}
-    end;
+handle_call({gets, Key}, _From, {Connections, CHash, _Socket}) ->
+    call_with_socket(
+      fun(Socket, NewConnections) ->
+              case get_command(Socket, "gets", [Key]) of
+                  {ok, []} ->
+                      {reply, {error, not_found}, {NewConnections, CHash, Socket}};
+                  {ok, [{_Key, Value, CasUnique64}]} ->
+                      {reply, {ok, binary_to_term(Value), CasUnique64}, {NewConnections, CHash, Socket}};
+                  Other ->
+                      {reply, Other, {NewConnections, CHash, Socket}}
+              end
+      end,
+      Key, Connections, CHash, _Socket);
 
 
-handle_call({getb, Key}, _From, {Connections, CHash, Socket}) ->
-    case get_command(Socket, "get", [Key]) of
-        {ok, []} ->
-            {reply, {error, not_found}, {Connections, CHash, Socket}};
-        {ok, [{_Key, Value, _CasUnique64}]} ->
-            {reply, {ok, Value}, {Connections, CHash, Socket}};
-        Other ->
-            {reply, Other, {Connections, CHash, Socket}}
-    end;
-
-handle_call({getsb, Key}, _From, {Connections, CHash, Socket}) ->
-    case get_command(Socket, "gets", [Key]) of
-        {ok, []} ->
-            {reply, {error, not_found}, {Connections, CHash, Socket}};
-        {ok, [{_Key, Value, CasUnique64}]} ->
-            {reply, {ok, Value, CasUnique64}, {Connections, CHash, Socket}};
-        Other ->
-            {reply, Other, {Connections, CHash, Socket}}
-    end;
+handle_call({getb, Key}, _From, {Connections, CHash, _Socket}) ->
+    call_with_socket(
+      fun(Socket, NewConnections) ->
+              case get_command(Socket, "get", [Key]) of
+                  {ok, []} ->
+                      {reply, {error, not_found}, {NewConnections, CHash, Socket}};
+                  {ok, [{_Key, Value, _CasUnique64}]} ->
+                      {reply, {ok, Value}, {NewConnections, CHash, Socket}};
+                  Other ->
+                      {reply, Other, {NewConnections, CHash, Socket}}
+              end
+      end,
+      Key, Connections, CHash, _Socket);
 
 
-handle_call({get_multi, Keys}, _From, {Connections, CHash, Socket}) ->
-    case get_command(Socket, "get", Keys) of
-        {ok, BinaryValues} ->
-            Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, binary_to_term(Value)} end, BinaryValues),
-            {reply, {ok, Values}, {Connections, CHash, Socket}};
-        Other ->
-            {reply, Other, {Connections, CHash, Socket}}
-    end;
+handle_call({getsb, Key}, _From, {Connections, CHash, _Socket}) ->
+    call_with_socket(
+      fun(Socket, NewConnections) ->
+              case get_command(Socket, "gets", [Key]) of
+                  {ok, []} ->
+                      {reply, {error, not_found}, {NewConnections, CHash, Socket}};
+                  {ok, [{_Key, Value, CasUnique64}]} ->
+                      {reply, {ok, Value, CasUnique64}, {NewConnections, CHash, Socket}};
+                  Other ->
+                      {reply, Other, {NewConnections, CHash, Socket}}
+              end
+      end,
+      Key, Connections, CHash, _Socket);
+
+
+handle_call({get_multi, Keys}, _From, {Connections, CHash, _Socket}) ->
+    call_with_socket(
+      fun(Socket, NewConnections) ->
+              case get_command(Socket, "get", Keys) of
+                  {ok, BinaryValues} ->
+                      Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, binary_to_term(Value)} end, BinaryValues),
+                      {reply, {ok, Values}, {NewConnections, CHash, Socket}};
+                  Other ->
+                      {reply, Other, {NewConnections, CHash, Socket}}
+              end
+      end,
+      Key, Connections, CHash, _Socket);
+
 
 
 handle_call({get_multib, Keys}, _From, {Connections, CHash, Socket}) ->
