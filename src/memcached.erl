@@ -336,7 +336,8 @@ init([Host, Port]) ->
             Server = Host ++ integer_to_list(Port),
             CHash = chash:new(memcached),
             ok = chash:add_node(CHash, Server, Server),
-            Connections = dict:store(Server, {Host, Port}, dict:new()),
+            Connections = ets:new(connections, [set, protected]),
+            true = ets:insert(Connections, {Server, {Host, Port}}),
             {ok, {Connections, CHash, Socket}};
         {error, Reason} ->
             {stop, Reason};
@@ -760,31 +761,32 @@ incr_decr_command(Socket, IncrDecr, Key, Value) ->
 
 get_socket(Key, Connections, CHash) ->
     Server = chash:get_node(CHash, Key),
-    case dict:find(Server, Connections) of
-        {ok, {Host, Port}} ->
+    case ets:lookup(Connections, Server) of
+        [{Server, {Host, Port}}] ->
             case gen_tcp:connect(Host, Port, ?TCP_OPTIONS) of
                 {ok, Socket} ->
                     Server = Host ++ integer_to_list(Port),
-                    NewConnections = dict:store(Server, Socket, Connections),
-                    {ok, Socket, NewConnections};
+                    true = ets:insert(Connections, {Server, Socket}),
+                    {ok, Socket, Connections};
                 {error, Reason} ->
                     {error, Reason};
                 Other ->
                     {error, Other}
             end;
-        {ok, Socket} ->
+        [{Server, Socket}] ->
             {ok, Socket, Connections}
     end.
 
 all_sockets(Connections) ->
-    filter_map(fun(X) ->
-                     case X of
-                         {_Host, _Port} ->
-                             false;
-                         Socket -> Socket
-                     end
-             end,
-             dict:to_list(Connections)).
+    ets:foldr(fun(X, Accum) ->
+                      case X of
+                          {_Host, _Port} ->
+                              Accum;
+                          Socket -> [Socket | Accum]
+                      end
+              end,
+              [],
+              Connections).
 
 
 filter_map(_Fun, []) ->
