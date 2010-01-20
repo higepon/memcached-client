@@ -1,4 +1,4 @@
-%%    Copyright (c) 2009  Taro Minowa(Higepon) <higepon@users.sourceforge.jp>
+%%    Copyright (c) 2009-2010  Taro Minowa(Higepon) <higepon@users.sourceforge.jp>
 %%
 %%    Redistribution and use in source and binary forms, with or without
 %%    modification, are permitted provided that the following conditions
@@ -421,19 +421,14 @@ handle_call({getsb, Key}, _From, {Connections, CHash, _Socket}) ->
       Key, Connections, CHash, _Socket);
 
 
-handle_call({get_multi, Keys}, _From, {Connections, CHash, _Socket}) ->
-    call_with_socket(
-      fun(Socket, NewConnections) ->
-              case get_command(Socket, "get", Keys) of
-                  {ok, BinaryValues} ->
-                      Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, binary_to_term(Value)} end, BinaryValues),
-                      {reply, {ok, Values}, {NewConnections, CHash, Socket}};
-                  Other ->
-                      {reply, Other, {NewConnections, CHash, Socket}}
-              end
-      end,
-      Key, Connections, CHash, _Socket);
-
+handle_call({get_multi, Keys}, _From, {Connections, CHash, Socket}) ->
+    case get_command(Socket, "get", Keys) of
+        {ok, BinaryValues} ->
+            Values = lists:map(fun({Key, Value, _CasUnique64}) -> {Key, binary_to_term(Value)} end, BinaryValues),
+            {reply, {ok, Values}, {Connections, CHash, Socket}};
+        Other ->
+            {reply, Other, {Connections, CHash, Socket}}
+    end;
 
 
 handle_call({get_multib, Keys}, _From, {Connections, CHash, Socket}) ->
@@ -467,31 +462,30 @@ handle_call({gets_multib, Keys}, _From, {Connections, CHash, Socket}) ->
 
 
 handle_call({setb, Key, Value}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "set", Key, Value, 0, 0), {Connections, CHash, Socket}};
+    storage_command(Connections, CHash, Socket, "set", Key, Value, 0, 0);
 handle_call({setb, Key, Value, Flags, ExpTime}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime), {Connections, CHash, Socket}};
+    storage_command(Connections, CHash, Socket, "set", Key, Value, Flags, ExpTime);
 
 
 handle_call({casb, Key, Value, Flags, ExpTime, CasUnique64}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "set", Key, Value, Flags, ExpTime, CasUnique64), {Connections, CHash, Socket}};
+    storage_command(Connections, CHash, Socket, "set", Key, Value, Flags, ExpTime, CasUnique64);
 
 
 handle_call({replaceb, Key, Value}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "replace", Key, Value, 0, 0), {Connections, CHash, Socket}};
+    storage_command(Connections, CHash, Socket, "replace", Key, Value, 0, 0);
 handle_call({replaceb, Key, Value, Flags, ExpTime}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "replace", Key, Value, Flags, ExpTime), {Connections, CHash, Socket}};
-
+    storage_command(Connections, CHash, Socket, "replace", Key, Value, Flags, ExpTime);
 
 handle_call({addb, Key, Value}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "add", Key, Value, 0, 0), {Connections, CHash, Socket}};
+    storage_command(Connections, CHash, Socket, "add", Key, Value, 0, 0);
 handle_call({addb, Key, Value, Flags, ExpTime}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "add", Key, Value, Flags, ExpTime), {Connections, CHash, Socket}};
+    storage_command(Connections, CHash, Socket, "add", Key, Value, Flags, ExpTime);
 
 
 handle_call({append, Key, Value}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "append", Key, term_to_binary(Value), 0, 0), {Connections, CHash, Socket}};
+    storage_command(Connections, CHash, Socket, "append", Key, term_to_binary(Value), 0, 0);
 handle_call({prepend, Key, Value}, _From, {Connections, CHash, Socket}) ->
-    {reply, storage_command(Socket, "prepend", Key, term_to_binary(Value), 0, 0), {Connections, CHash, Socket}};
+    storage_command(Connections, CHash, Socket, "prepend", Key, term_to_binary(Value), 0, 0);
 
 
 handle_call({delete, Key}, _From, {Connections, CHash, Socket}) ->
@@ -679,34 +673,40 @@ parse_stats(Data, Stats) ->
             end
     end.
 
-storage_command(Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
+storage_command(Connections, CHash, Socket, Command, Key, Value, Flags, ExpTime) when is_integer(Flags) andalso is_integer(ExpTime) ->
     EmptyCasUnique64 = <<>>,
-    storage_command(Socket, Command, Key, Value, Flags, ExpTime, EmptyCasUnique64).
-storage_command(Socket, Command, Key, Value, Flags, ExpTime, CasUnique64) when is_integer(Flags) andalso is_integer(ExpTime) ->
-    ValueAsBinary = Value,
-    Bytes = integer_to_list(size(ValueAsBinary)),
-    CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes, <<" ">>, CasUnique64]),
-    gen_tcp:send(Socket, <<CommandAsBinary/binary, "\r\n">>),
-    gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
-    case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
-        {ok, Packet} ->
-            case string:tokens(binary_to_list(Packet), "\r\n") of
-                ["STORED"] ->
-                    ok;
-                ["NOT_STORED"] ->
-                    {error, not_stored};
-                ["ERROR"] ->
-                    {error, unknown_command};
-                %% memcached returns this for append command.
-                ["ERROR", "ERROR"] ->
-                    {error, unknown_command};
-                Other ->
-                    io:format("Other=~p~n", [Other]),
-                    {error, Other}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    storage_command(Connections, CHash, Socket, Command, Key, Value, Flags, ExpTime, EmptyCasUnique64).
+storage_command(Connections, CHash, _Socket, Command, Key, Value, Flags, ExpTime, CasUnique64) when is_integer(Flags) andalso is_integer(ExpTime) ->
+    call_with_socket(
+      fun(Socket, NewConnections) ->
+              ValueAsBinary = Value,
+              Bytes = integer_to_list(size(ValueAsBinary)),
+              CommandAsBinary = iolist_to_binary([Command, <<" ">>, Key, <<" ">>, integer_to_list(Flags), <<" ">>, integer_to_list(ExpTime), <<" ">>, Bytes, <<" ">>, CasUnique64]),
+              gen_tcp:send(Socket, <<CommandAsBinary/binary, "\r\n">>),
+              gen_tcp:send(Socket, <<ValueAsBinary/binary, "\r\n">>),
+              {reply,
+               case gen_tcp:recv(Socket, 0, ?TIMEOUT) of
+                   {ok, Packet} ->
+                       case string:tokens(binary_to_list(Packet), "\r\n") of
+                           ["STORED"] ->
+                               ok;
+                           ["NOT_STORED"] ->
+                               {error, not_stored};
+                           ["ERROR"] ->
+                               {error, unknown_command};
+                           %% memcached returns this for append command.
+                           ["ERROR", "ERROR"] ->
+                               {error, unknown_command};
+                           Other ->
+                               io:format("Other=~p~n", [Other]),
+                               {error, Other}
+                       end;
+                   {error, Reason} ->
+                       {error, Reason}
+              end,
+               {NewConnections, CHash, _Socket}}
+      end,
+      Key, Connections, CHash, _Socket).
 
 
 %% memcached 1.4.0 or higher doesn't support time argument.
